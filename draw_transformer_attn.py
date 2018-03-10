@@ -44,17 +44,6 @@ lstm_enc = tf.contrib.rnn.LSTMCell(enc_size, state_is_tuple=True)  # encoder Op
 lstm_dec = tf.contrib.rnn.LSTMCell(dec_size, state_is_tuple=True)  # decoder Op
 
 
-def linear(x, output_dim):
-    """
-    affine transformation Wx+b
-    assumes x.shape = (batch_size, num_features)
-    """
-    w = tf.get_variable("w", [x.get_shape()[1], output_dim])
-    b = tf.get_variable("b", [output_dim],
-                        initializer=tf.constant_initializer(0.0))
-    return tf.matmul(x, w) + b
-
-
 def filterbank(gx, gy, sigma2, delta, N):
     grid_i = tf.reshape(tf.cast(tf.range(N), tf.float32), [1, -1])
     mu_x = gx + (grid_i - N / 2 - 0.5) * delta  # eq 19
@@ -74,7 +63,7 @@ def filterbank(gx, gy, sigma2, delta, N):
 
 def attn_window(scope, h_dec, N):
     with tf.variable_scope(scope):
-        params = linear(h_dec, 5)
+        params = tf.contrib.layers.fully_connected(h_dec, 5, activation_fn=None)
     # gx_,gy_,log_sigma2,log_delta,log_gamma=tf.split(1,5,params)
     gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(params, 5, 1)
     gx = (W + 1) / 2 * (gx_ + 1)
@@ -126,9 +115,9 @@ def sampleQ(h_enc):
     """
     with tf.variable_scope("Qsampler"):
         with tf.variable_scope("mu"):
-            mu = linear(h_enc, z_size)
+            mu = tf.contrib.layers.fully_connected(h_enc, z_size, activation_fn=None)
         with tf.variable_scope("sigma"):
-            logsigma = linear(h_enc, z_size)
+            logsigma = tf.contrib.layers.fully_connected(h_enc, z_size, activation_fn=None)
             sigma = tf.exp(logsigma)
     return (mu + sigma * e, mu, logsigma, sigma)
 
@@ -142,13 +131,13 @@ def decode(state, input):
 
 def write_no_attn(h_dec):
     with tf.variable_scope("write"):
-        return linear(h_dec, img_size)
+        return tf.contrib.layers.fully_connected(h_dec, img_size, activation_fn=None)
 
 
 def write_attn(h_dec):
     with tf.variable_scope("write"):
         with tf.variable_scope("write_contents"):
-            w = linear(h_dec, write_size)  # batch x (write_n*write_n)
+            w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None) # batch x (write_n*write_n)
         N = write_n
         w = tf.reshape(w, [batch_size, N, N])
         Fx, Fy, gamma = attn_window("write_attn", h_dec, write_n)
