@@ -1,21 +1,22 @@
 #!/usr/bin/env python
 
+
 """"
 Simple implementation of http://arxiv.org/pdf/1502.04623v2.pdf in TensorFlow with 'hard'
 attention via Spatial Transformer Networks (https://arxiv.org/pdf/1506.02025.pdf).
 
 Example Usage:
-    python draw.py --data_dir=/tmp/draw --read_attn=True --write_attn=True
+    python draw.py --data_dir=data --write_same_attn=False
 """
 
 import tensorflow as tf
 from tensorflow.examples.tutorials import mnist
 import numpy as np
 import os
+from transformer import transformer
 
 tf.flags.DEFINE_string("data_dir", "", "")
-tf.flags.DEFINE_boolean("read_attn", True, "enable attention for reader")
-tf.flags.DEFINE_boolean("write_attn", True, "enable attention for writer")
+tf.flags.DEFINE_boolean("write_same_attn", False, "Whether write step should be forced to write to the same attention patch as the read step.")
 FLAGS = tf.flags.FLAGS
 
 ## MODEL PARAMETERS ##
@@ -26,72 +27,97 @@ enc_size = 256  # number of hidden units / output size in LSTM
 dec_size = 256
 read_n = 5  # read glimpse grid width/height
 write_n = 5  # write glimpse grid width/height
-read_size = 2 * read_n * read_n if FLAGS.read_attn else 2 * img_size
-write_size = write_n * write_n if FLAGS.write_attn else img_size
+read_size = 2 * read_n * read_n
+write_size = write_n * write_n
+scale_hidden_units = 64 # Number of hidden units in the localization network for predicting scale
+shift_hidden_units = 64 # Number of hidden units in the localization network for predicting shift
 z_size = 10  # QSampler output size
 T = 10  # MNIST generation sequence length
 batch_size = 100  # training minibatch size
 train_iters = 10000
-learning_rate = 1e-3  # learning rate for optimizer
+learning_rate = 1e-2  # learning rate for optimizer
 eps = 1e-8  # epsilon for numerical stability
 
 ## BUILD MODEL ##
 
-x = tf.placeholder(tf.float32, shape=(batch_size, img_size)
-                   )  # input (batch_size * img_size)
+x = tf.placeholder(tf.float32, shape=(batch_size, img_size))  # input (batch_size * img_size)
 e = tf.random_normal((batch_size, z_size), mean=0, stddev=1)  # Qsampler noise
 lstm_enc = tf.contrib.rnn.LSTMCell(enc_size, state_is_tuple=True)  # encoder Op
 lstm_dec = tf.contrib.rnn.LSTMCell(dec_size, state_is_tuple=True)  # decoder Op
 
 
-def filterbank(gx, gy, sigma2, delta, N):
-    grid_i = tf.reshape(tf.cast(tf.range(N), tf.float32), [1, -1])
-    mu_x = gx + (grid_i - N / 2 - 0.5) * delta  # eq 19
-    mu_y = gy + (grid_i - N / 2 - 0.5) * delta  # eq 20
-    a = tf.reshape(tf.cast(tf.range(W), tf.float32), [1, 1, -1])
-    b = tf.reshape(tf.cast(tf.range(H), tf.float32), [1, 1, -1])
-    mu_x = tf.reshape(mu_x, [-1, N, 1])
-    mu_y = tf.reshape(mu_y, [-1, N, 1])
-    sigma2 = tf.reshape(sigma2, [-1, 1, 1])
-    Fx = tf.exp(-tf.square(a - mu_x) / (2 * sigma2))
-    Fy = tf.exp(-tf.square(b - mu_y) / (2 * sigma2))  # batch x N x H
-    # normalize, sum over W and H dims
-    Fx = Fx / tf.maximum(tf.reduce_sum(Fx, 2, keep_dims=True), eps)
-    Fy = Fy / tf.maximum(tf.reduce_sum(Fy, 2, keep_dims=True), eps)
-    return Fx, Fy
+def spatial_transformer_attn_window_params(scope, h_dec):
+    '''
+    Apply a localization network with a single hidden layer to the h_dec output
+    in order to determine the parameters used to define the attention window.
+    The parameters to be predicted are:
+    s - scaling parameter
+    tx - x translation
+    ty - y translation
 
+    These parameters are used to define an affine transformation to be applied
+    by a spatial transformer network as follows:
+    A = [[s, 0, tx],
+         [0, s, ty]]
 
-def attn_window(scope, h_dec, N):
+    The fully-connected layer is initialized to achieved an identity affine
+    transformation (no transformation) before training:
+    A0 = [[1, 0, 0],
+          [0, 1, 0]]
+    '''
+    # Define 'localization network':
     with tf.variable_scope(scope):
-        params = tf.contrib.layers.fully_connected(h_dec, 5, activation_fn=None)
-    # gx_,gy_,log_sigma2,log_delta,log_gamma=tf.split(1,5,params)
-    gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(params, 5, 1)
-    gx = (W + 1) / 2 * (gx_ + 1)
-    gy = (H + 1) / 2 * (gy_ + 1)
-    sigma2 = tf.exp(log_sigma2)
-    delta = (max(W, H) - 1) / (N - 1) * tf.exp(log_delta)  # batch x N
-    return filterbank(gx, gy, sigma2, delta, N) + (tf.exp(log_gamma),)
+        with tf.variable_scope('scale'):
+            scale_h = tf.contrib.layers.fully_connected(h_dec, scale_hidden_units,
+                scope='hidden')
+            scale = tf.contrib.layers.fully_connected(scale_h, 1,
+                activation_fn=tf.nn.sigmoid, # Limit scale to (0,1)
+                weights_initializer=tf.zeros_initializer,
+                biases_initializer=tf.ones_initializer, # Initially, output scale = 1
+                scope='output')
+            s = scale[:, 0]
+        with tf.variable_scope('shift'):
+            shift_h = tf.contrib.layers.fully_connected(h_dec, shift_hidden_units,
+                scope='hidden')
+            shift = tf.contrib.layers.fully_connected(shift_h, 2,
+                activation_fn=tf.nn.tanh, # Limit translation to (-1, 1)
+                weights_initializer=tf.zeros_initializer,
+                biases_initializer=tf.zeros_initializer, # Initially, output shift = 0
+                scope='output')
+            tx, ty = shift[:, 0], shift[:, 1]
+        return s, tx, ty
+
+
+def params_to_transformation_matrix(s, tx, ty):
+    """
+    Combine scale and translation into transformation matrix
+
+    This operation produces the following tensor (for a batch size of 2):
+    [[[s1,  0, tx1],  # batch 1
+      [ 0, s1, ty1]],
+     [[s2,  0, tx2],  # batch 2
+      [ 0, s2, ty2]]]
+    """
+    return tf.stack([
+        tf.concat([tf.stack([s, tf.zeros_like(s)], axis=1), tf.expand_dims(tx, 1)], axis=1),
+        tf.concat([tf.stack([tf.zeros_like(s), s], axis=1), tf.expand_dims(ty, 1)], axis=1),
+        ], axis=1)
 
 ## READ ##
 
-def read_no_attn(x, x_hat, h_dec_prev):
-    return tf.concat([x, x_hat], 1)
+def read_spatial_transformer_attention(x, x_hat, s, tx, ty):
+    s, tx, ty = spatial_transformer_attn_window_params('read_attn', h_dec_prev)
+    transformation_mat = params_to_transformation_matrix(s, tx, ty)
+    with tf.variable_scope('read_spatial_transformer'):
+        # Full canvas to attention window transformation
+        x = tf.expand_dims(tf.reshape(x, [batch_size, H, W]), -1)
+        x_hat = tf.expand_dims(tf.reshape(x_hat, [batch_size, H, W]), -1)
+        x_window = transformer(x, transformation_mat, [read_n, read_n])
+        x_window = tf.reshape(x_window, [batch_size, read_n * read_n])
+        x_hat_window = transformer(x_hat, transformation_mat, [read_n, read_n])
+        x_hat_window = tf.reshape(x_hat_window, [batch_size, read_n * read_n])
+        return tf.concat([x_window, x_hat_window], 1)
 
-
-def read_attn(x, x_hat, h_dec_prev):
-    Fx, Fy, gamma = attn_window("read_attn", h_dec_prev, read_n)
-    def filter_img(img, Fx, Fy, gamma, N):
-        Fxt = tf.transpose(Fx, perm=[0, 2, 1])
-        img = tf.reshape(img, [-1, H, W])
-        glimpse = tf.matmul(Fy, tf.matmul(img, Fxt))
-        glimpse = tf.reshape(glimpse, [-1, N * N])
-        return glimpse * tf.reshape(gamma, [-1, 1])
-    x = filter_img(x, Fx, Fy, gamma, read_n)  # batch x (read_n*read_n)
-    x_hat = filter_img(x_hat, Fx, Fy, gamma, read_n)
-    return tf.concat([x, x_hat], 1)  # concat along feature axis
-
-
-read = read_attn if FLAGS.read_attn else read_no_attn
 
 ## ENCODE ##
 
@@ -129,32 +155,25 @@ def decode(state, input):
 
 ## WRITER ##
 
-def write_no_attn(h_dec):
+def write_spatial_transformer_attention(h_dec, s, tx, ty):
     with tf.variable_scope("write"):
-        return tf.contrib.layers.fully_connected(h_dec, img_size, activation_fn=None)
+        w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None, scope='fc_write_contents') # batch x (write_n*write_n)
+        w = tf.reshape(w, [batch_size, write_n, write_n])
+        transformation_mat = params_to_transformation_matrix(s, tx, ty)
 
-
-def write_attn(h_dec):
-    with tf.variable_scope("write"):
-        with tf.variable_scope("write_contents"):
-            w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None) # batch x (write_n*write_n)
-        N = write_n
-        w = tf.reshape(w, [batch_size, N, N])
-        Fx, Fy, gamma = attn_window("write_attn", h_dec, write_n)
-        Fyt = tf.transpose(Fy, perm=[0, 2, 1])
-        wr = tf.matmul(Fyt, tf.matmul(w, Fx))
-        wr = tf.reshape(wr, [batch_size, H * W])
-        # gamma=tf.tile(gamma,[1,H*W])
-        return wr * tf.reshape(1.0 / gamma, [-1, 1])
-
-
-write = write_attn if FLAGS.write_attn else write_no_attn
+        # Attention window to full canvas size
+        canvas = transformer(tf.expand_dims(w, -1), transformation_mat, [H, W])
+        canvas = tf.reshape(canvas, [batch_size, H * W])
+        return canvas
 
 ## STATE VARIABLES ##
 
 cs = [0] * T  # sequence of canvases
 # gaussian params generated by SampleQ. We will need these for computing loss.
 mus, logsigmas, sigmas = [0] * T, [0] * T, [0] * T
+# attention window transformation PARAMETERS
+read_scales, read_txs, read_tys = [1] * T, [0] * T, [0] * T
+write_scales, write_txs, write_tys = [1] * T, [0] * T, [0] * T
 # initial states
 h_dec_prev = tf.zeros((batch_size, dec_size))
 enc_state = lstm_enc.zero_state(batch_size, tf.float32)
@@ -167,11 +186,18 @@ with tf.variable_scope("draw", reuse=tf.AUTO_REUSE):
     for t in range(T):
         c_prev = tf.zeros((batch_size, img_size)) if t == 0 else cs[t - 1]
         x_hat = x - tf.sigmoid(c_prev)  # error image
-        r = read(x, x_hat, h_dec_prev)
+        read_scales[t], read_txs[t], read_tys[t] = spatial_transformer_attn_window_params("read_attn", h_dec_prev)
+        r = read_spatial_transformer_attention(x, x_hat, read_scales[t], read_txs[t], read_tys[t])
         h_enc, enc_state = encode(enc_state, tf.concat([r, h_dec_prev], 1))
         z, mus[t], logsigmas[t], sigmas[t] = sampleQ(h_enc)
         h_dec, dec_state = decode(dec_state, z)
-        cs[t] = c_prev + write(h_dec)  # store results
+        if FLAGS.write_same_attn:
+            write_scales[t] = 1.0 / read_scales[t]
+            write_txs[t] = -read_txs[t] / read_scales[t]
+            write_tys[t] = -read_tys[t] / read_scales[t]
+        else:
+            write_scales[t], write_txs[t], write_tys[t] = spatial_transformer_attn_window_params("write_attn", h_dec)
+        cs[t] = c_prev + write_spatial_transformer_attention(h_dec, write_scales[t], write_txs[t], write_tys[t])  # store results
         h_dec_prev = h_dec
 
 ## LOSS FUNCTION ##
