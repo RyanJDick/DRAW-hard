@@ -29,8 +29,6 @@ read_n = 5  # read glimpse grid width/height
 write_n = 5  # write glimpse grid width/height
 read_size = 2 * read_n * read_n
 write_size = write_n * write_n
-scale_hidden_units = 64 # Number of hidden units in the localization network for predicting scale
-shift_hidden_units = 64 # Number of hidden units in the localization network for predicting shift
 z_size = 10  # QSampler output size
 T = 10  # MNIST generation sequence length
 batch_size = 100  # training minibatch size
@@ -68,22 +66,18 @@ def spatial_transformer_attn_window_params(scope, h_dec):
     # Define 'localization network':
     with tf.variable_scope(scope):
         with tf.variable_scope('scale'):
-            scale_h = tf.contrib.layers.fully_connected(h_dec, scale_hidden_units,
-                scope='hidden')
-            scale = tf.contrib.layers.fully_connected(scale_h, 1,
+            scale = tf.contrib.layers.fully_connected(h_dec, 1,
                 activation_fn=tf.nn.sigmoid, # Limit scale to (0,1)
                 weights_initializer=tf.zeros_initializer,
                 biases_initializer=tf.ones_initializer, # Initially, output scale = 1
-                scope='output')
+                scope='fc')
             s = scale[:, 0]
         with tf.variable_scope('shift'):
-            shift_h = tf.contrib.layers.fully_connected(h_dec, shift_hidden_units,
-                scope='hidden')
-            shift = tf.contrib.layers.fully_connected(shift_h, 2,
+            shift = tf.contrib.layers.fully_connected(h_dec, 2,
                 activation_fn=tf.nn.tanh, # Limit translation to (-1, 1)
                 weights_initializer=tf.zeros_initializer,
                 biases_initializer=tf.zeros_initializer, # Initially, output shift = 0
-                scope='output')
+                scope='fc')
             tx, ty = shift[:, 0], shift[:, 1]
         return s, tx, ty
 
