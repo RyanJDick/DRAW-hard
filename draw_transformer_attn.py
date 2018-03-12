@@ -151,9 +151,14 @@ def decode(state, input):
 
 def write_spatial_transformer_attention(h_dec, s, tx, ty):
     with tf.variable_scope("write"):
+        # 'Invert' transformation parameters because we are now going from
+        # window to canvas, rather than the reverse:
+        s_write = 1.0 / s
+        tx_write = -tx / s
+        ty_write = -ty / s
         w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None, scope='fc_write_contents') # batch x (write_n*write_n)
         w = tf.reshape(w, [batch_size, write_n, write_n])
-        transformation_mat = params_to_transformation_matrix(s, tx, ty)
+        transformation_mat = params_to_transformation_matrix(s_write, tx_write, ty_write)
 
         # Attention window to full canvas size
         canvas = transformer(tf.expand_dims(w, -1), transformation_mat, [H, W])
@@ -186,9 +191,9 @@ with tf.variable_scope("draw", reuse=tf.AUTO_REUSE):
         z, mus[t], logsigmas[t], sigmas[t] = sampleQ(h_enc)
         h_dec, dec_state = decode(dec_state, z)
         if FLAGS.write_same_attn:
-            write_scales[t] = 1.0 / read_scales[t]
-            write_txs[t] = -read_txs[t] / read_scales[t]
-            write_tys[t] = -read_tys[t] / read_scales[t]
+            write_scales[t] = read_scales[t]
+            write_txs[t] = read_txs[t]
+            write_tys[t] = read_tys[t]
         else:
             write_scales[t], write_txs[t], write_tys[t] = spatial_transformer_attn_window_params("write_attn", h_dec)
         cs[t] = c_prev + write_spatial_transformer_attention(h_dec, write_scales[t], write_txs[t], write_tys[t])  # store results
