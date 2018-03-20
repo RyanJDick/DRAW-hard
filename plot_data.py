@@ -11,28 +11,29 @@ if not interactive:
 	matplotlib.use('Agg') # Force matplotlib to not use any Xwindows backend.
 import matplotlib.pyplot as plt
 
-
-def xrecons_grid(X,B,A):
+def xrecons_grid(X,H,W):
 	"""
-	plots canvas for single time step
+	plots grid of canvases for a single time step
 	X is x_recons, (batch_size x img_size)
-	assumes features = BxA images
+	assumes features = HxW images
 	batch is assumed to be a square number
 	"""
 	padsize=1
 	padval=.5
-	ph=B+2*padsize
-	pw=A+2*padsize
+	ph=H+2*padsize # Padded height
+	pw=W+2*padsize # Padded width
 	batch_size=X.shape[0]
+	# Take square root, because the image is going to contain a square grid of
+	# reconstruction examples:
 	N=int(np.sqrt(batch_size))
-	X=X.reshape((N,N,B,A))
+	X=X.reshape((N,N,H,W))
 	img=np.ones((N*ph,N*pw))*padval
 	for i in range(N):
 		for j in range(N):
 			startr=i*ph+padsize
-			endr=startr+B
+			endr=startr+H
 			startc=j*pw+padsize
-			endc=startc+A
+			endc=startc+W
 			img[startr:endr,startc:endc]=X[i,j,:,:]
 	return img
 
