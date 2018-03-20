@@ -11,13 +11,15 @@ if not interactive:
 	matplotlib.use('Agg') # Force matplotlib to not use any Xwindows backend.
 import matplotlib.pyplot as plt
 
-def xrecons_grid(X,H,W):
+def xrecons_grid(X):
 	"""
 	plots grid of canvases for a single time step
 	X is x_recons, (batch_size x img_size)
 	assumes features = HxW images
 	batch is assumed to be a square number
 	"""
+	H = C.shape[2]
+	W = C.shape[3]
 	padsize=1
 	padval=.5
 	ph=H+2*padsize # Padded height
@@ -41,13 +43,12 @@ if __name__ == '__main__':
 	prefix=sys.argv[1]
 	out_file=sys.argv[2]
 	[C,Lxs,Lzs]=np.load(out_file)
-	T,batch_size,img_size=C.shape
+	T,batch_size,H,W=C.shape
 	X=1.0/(1.0+np.exp(-C)) # x_recons=sigmoid(canvas)
-	B=A=int(np.sqrt(img_size))
 	if interactive:
 		f,arr=plt.subplots(1,T)
 	for t in range(T):
-		img=xrecons_grid(X[t,:,:],B,A)
+		img=xrecons_grid(X[t,:,:,:])
 		if interactive:
 			arr[t].matshow(img,cmap=plt.cm.gray)
 			arr[t].set_xticks([])
