@@ -13,6 +13,7 @@ import tensorflow as tf
 from tensorflow.examples.tutorials import mnist
 import numpy as np
 import os
+import data_loader
 
 tf.flags.DEFINE_string("data_dir", "", "")
 tf.flags.DEFINE_boolean("read_attn", True, "enable attention for reader")
@@ -204,11 +205,8 @@ for i,(g,v) in enumerate(grads):
 train_op=optimizer.apply_gradients(grads)
 
 ## RUN TRAINING ##
+mnist_data = data_loader.MNISTLoader(FLAGS.data_dir)
 
-data_directory = os.path.join(FLAGS.data_dir, "mnist")
-if not os.path.exists(data_directory):
-	os.makedirs(data_directory)
-train_data = mnist.input_data.read_data_sets(data_directory, one_hot=True).train # binarized (0-1) mnist data
 
 fetches=[]
 fetches.extend([Lx,Lz,train_op])
@@ -222,7 +220,7 @@ tf.global_variables_initializer().run()
 #saver.restore(sess, "/tmp/draw/drawmodel.ckpt") # to restore from model, uncomment this line
 
 for i in range(train_iters):
-	xtrain,_=train_data.next_batch(batch_size) # xtrain is (batch_size x img_size)
+	xtrain = mnist_data.next_train_batch(batch_size) # xtrain is (batch_size x img_size)
 	feed_dict={x:xtrain}
 	results=sess.run(fetches,feed_dict)
 	Lxs[i],Lzs[i],_=results
@@ -233,7 +231,7 @@ for i in range(train_iters):
 
 canvases=sess.run(cs,feed_dict) # generate some examples
 canvases=np.array(canvases) # T x batch x img_size
-canvases=canvases.reshape((canvases.shape[0], canvases.shape[1], H, W)) # T x batch x H x W
+
 
 out_file=os.path.join(FLAGS.data_dir,"draw_data.npy")
 np.save(out_file,[canvases,Lxs,Lzs])

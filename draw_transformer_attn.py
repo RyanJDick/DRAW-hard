@@ -21,7 +21,7 @@ FLAGS = tf.flags.FLAGS
 
 ## MODEL PARAMETERS ##
 
-W, H = 28, 28  # image width,height
+W, H, C = 28, 28, 1  # image width,height
 img_size = H * W  # the canvas size
 enc_size = 256  # number of hidden units / output size in LSTM
 dec_size = 256
@@ -235,12 +235,7 @@ for i, (g, v) in enumerate(grads):
 train_op = optimizer.apply_gradients(grads)
 
 ## RUN TRAINING ##
-
-data_directory = os.path.join(FLAGS.data_dir, "mnist")
-if not os.path.exists(data_directory):
-    os.makedirs(data_directory)
-train_data = mnist.input_data.read_data_sets(
-    data_directory, one_hot=True).train  # binarized (0-1) mnist data
+mnist_data = data_loader.MNISTLoader(FLAGS.data_dir)
 
 fetches = []
 fetches.extend([Lx, Lz, train_op])
@@ -255,7 +250,7 @@ tf.global_variables_initializer().run()
 
 for i in range(train_iters):
     # xtrain is (batch_size x img_size)
-    xtrain, _ = train_data.next_batch(batch_size)
+    xtrain = mnist_data.next_train_batch(batch_size)
     feed_dict = {x: xtrain}
     results = sess.run(fetches, feed_dict)
     Lxs[i], Lzs[i], _ = results
@@ -263,12 +258,22 @@ for i in range(train_iters):
         print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
 
 ## TRAINING FINISHED ##
-
-canvases = sess.run(cs, feed_dict)  # generate some examples
+# Generate some examples
+canvases, r_s, r_tx, r_ty, w_s, w_tx, w_ty = sess.run([cs, read_scales, read_txs,
+    read_tys, write_scales, write_txs, write_tys], feed_dict)
 canvases = np.array(canvases)  # T x batch x img_size
+canvases=canvases.reshape((canvases.shape[0], canvases.shape[1], H, W)) # T x batch x H x W
+r_s = np.array(r_s) # T x batch
+r_tx = np.array(r_tx)
+r_ty = np.array(r_ty)
+w_s = np.array(w_s)
+w_tx = np.array(w_tx)
+w_ty = np.array(w_ty)
+
+print("r_s shape: " + str(r_s.shape))
 
 out_file = os.path.join(FLAGS.data_dir, "draw_transformer_data.npy")
-np.save(out_file, [canvases, Lxs, Lzs])
+np.save(out_file, [canvases, r_s, r_tx, r_ty, w_s, w_tx, w_ty, Lxs, Lzs])
 print("Outputs saved in file: %s" % out_file)
 
 ckpt_file = os.path.join(FLAGS.data_dir, "draw_transformer_model.ckpt")
