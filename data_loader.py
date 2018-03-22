@@ -22,6 +22,11 @@ class DataLoader:
 
         Params:
         batch_size - int: Number of data points to return.
+
+        Return:
+        data -  numpy array of size (B x H x W x C) where each value is in the
+                range [0, 1]. RGB pixel values have to be normalized by dividing
+                by 255
         """
         raise NotImplementedError("next_train_batch(self, batch_size) not implemented.")
 
@@ -32,6 +37,11 @@ class DataLoader:
 
         Params:
         batch_size - int: Number of data points to return.
+
+        Return:
+        data -  numpy array of size (B x H x W x C) where each value is in the
+                range [0, 1]. RGB pixel values have to be normalized by dividing
+                by 255
         """
         raise NotImplementedError("next_test_batch(self, batch_size) not implemented.")
 
@@ -63,8 +73,14 @@ class MNISTLoader(DataLoader):
 
         Params:
         batch_size - int: Number of data points to return.
+
+        Return:
+        data -  numpy array of size (B x 28 x 28 x 1) where each entry is a
+        binary value (0 or 1)
         """
         x_train, _ = self._train_data.next_batch(batch_size)
+        # x_train is a 1D vector, reshape to image dimensions with single channel
+        x_train = x_train.reshape((batch_size, 28, 28, 1))
         return x_train
 
     def next_test_batch(self, batch_size):
@@ -74,9 +90,15 @@ class MNISTLoader(DataLoader):
 
         Params:
         batch_size - int: Number of data points to return.
+
+        Return:
+        data -  numpy array of size (B x 28 x 28 x 1) where each entry is a
+        binary value (0 or 1)
         """
         _cur_test_index += batch_size
         if _cur_test_index > _num_test_images:
             return None
         x_test, _ = self._test_data.next_batch(batch_size)
+        # x_test is a 1D vector, reshape to image dimensions with single channel
+        x_test = x_test.reshape((batch_size, 28, 28, 1))
         return x_test
