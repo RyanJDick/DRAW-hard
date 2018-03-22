@@ -105,7 +105,13 @@ def attn_window(scope,h_dec,N):
 
 ## READ ##
 def read_no_attn(x,x_hat,h_dec_prev):
-	return tf.concat([x,x_hat], -1) # Result has twice as many channels as the input image, x
+	x_combined = tf.concat([x, x_hat], -1) # (B, H, W, 2 * C)
+	x_combined_channels = tf.split(x_combined, 2*C, axis=-1) # 2*C tensors of shape (B, H, W, 1)
+	read_features = []
+	for x_combined_channel in x_combined_channels:
+		read_features.append(tf.reshape(x_combined_channel, [batch_size, H * W]))
+	read_features = tf.concat(read_features, -1) # (B, H * W * C * 2)
+	return read_features
 
 def read_attn(x,x_hat,h_dec_prev):
 	Fx,Fy,gamma=attn_window("read",h_dec_prev,read_n)
