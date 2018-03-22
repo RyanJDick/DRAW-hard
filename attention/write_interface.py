@@ -17,6 +17,26 @@ class WriteInterface:
         self._C = channels
         self._N = read_n
 
+    def _generate_write_patch(self, h_dec):
+        """
+        Applies a fully connected linear layer to generate the attention patch
+        to be written.
+
+        Parameters
+        ----------
+        h_dec:      Output of decoder. (B x decoder_output_size)
+
+        Return
+        ------
+        w:          Write patch. (B, N, N, C)
+        """
+        with tf.variable_scope('w_patch')
+            write_size = self._N * self._N * self._C
+            w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None, scope='fc')
+            w = tf.reshape(w, [-1, self._N, self._N, self._C])
+            return w
+
+
     def write(self, h_dec):
         """
         Implements the write attention mechanism.

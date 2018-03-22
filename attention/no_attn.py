@@ -68,6 +68,29 @@ class WriteNoAttn(WriteInterface):
 
     # __init__ is inherited from WriteInterface
 
+    def _generate_write_patch(h_dec):
+        """
+        Overrides implementation in WriteInterface in order to generate a write
+        patch the same size of the input image.
+
+        Applies a fully connected linear layer to generate the attention patch
+        to be written.
+
+        Parameters
+        ----------
+        h_dec:      Output of decoder. (B x decoder_output_size)
+
+        Return
+        ------
+        w:          Write patch. (B, H, W, C)
+        """
+        with tf.variable_scope('w_patch')
+            write_size = self._H * self._W * self._C
+            w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None, scope='fc')
+            w = tf.reshape(w, [-1, self._H, self._W, self._C])
+            return w
+
+
     def write(self, h_dec):
         """
         Implements the write step with no attention.
@@ -98,15 +121,15 @@ class WriteNoAttn(WriteInterface):
                             use a thicker line to indicate that higher variance
                             filters are being used.)
         """
-        ## Apply fully connected linear layer to generate write canvas
-        write_size = self._H * self._W * self._C
-        w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None, scope='write_no_attn_fc')
-        w = tf.reshape(w, [-1, self._H, self._W, self._C])
 
-        ## ## Determine appropriate parameters for attention visualization:
-        cx = (self._W + 1) / 2
-        cy = (self._H + 1) / 2
-        d = min(self._H, self._W) # This is going to be wrong if the image isn't square
-        thickness = 1.0 # Arbitrary value to be updated
+        with tf.variable_scope('write'):
+            ## Predict 'what' to write
+            w = self._generate_write_patch(h_dec)
 
-        return w, cx, cy, d, thickness
+            ## Determine appropriate parameters for attention visualization:
+            cx = (self._W + 1) / 2
+            cy = (self._H + 1) / 2
+            d = min(self._H, self._W) # This is going to be wrong if the image isn't square
+            thickness = 1.0 # Arbitrary value to be updated
+
+            return w, cx, cy, d, thickness

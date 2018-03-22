@@ -180,7 +180,7 @@ class ReadSoftAttn(ReadInterface):
             x_combined_channels = tf.split(x_combined, 2 * C, axis=-1)
             x_combined_glimpse_channels = []
             for x_combined_channel in x_combined_channels:
-                x_combined_glimpse_channels.append(filter_img(x_combined_channel, Fx, Fy, gamma, self._N))
+                x_combined_glimpse_channels.append(self._filter_img(x_combined_channel, Fx, Fy, gamma, self._N))
             # Concatenate the attention windows from all channels to obtain a tensor
             # of shape (B, N x N x C x 2)
             x_combined_glimpse = tf.concat(x_combined_glimpse_channels, -1)
@@ -226,10 +226,7 @@ class WriteInterface:
         ## Apply fully connected linear layer to generate write canvas
         with tf.variable_scope('write'):
             ## Predict 'what' to write
-            with tf.variable_scope('w_patch')
-                write_size = self._H * self._W * self._C
-                w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None, scope='fc')
-                w = tf.reshape(w, [-1, self._N, self._N, self._C])
+            w = self._generate_write_patch(h_dec)
 
             ## Determine 'where' to write
         	Fx, Fy, gamma, visualization_params = attn_window("soft_attn", h_dec, self._N)
