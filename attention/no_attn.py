@@ -46,11 +46,7 @@ class ReadNoAttn(ReadInterface):
         """
         ## Reshape x and x_hat to desired output dimensions:
         x_combined = tf.concat([x, x_hat], -1) # (B, H, W, 2 * C)
-    	x_combined_channels = tf.split(x_combined, 2 * self._C, axis=-1) # 2*C tensors of shape (B, H, W, 1)
-    	read_features = []
-    	for x_combined_channel in x_combined_channels:
-    		read_features.append(tf.reshape(x_combined_channel, [batch_size, self._H * self._W]))
-    	read_features = tf.concat(read_features, -1) # (B, H * W * C * 2)
+    	read_features = tf.reshape(x_combined, [-1, self._H * self._W * self._C * 2])
 
         ## Determine appropriate parameters for attention visualization:
         cx = (self._W + 1) / 2

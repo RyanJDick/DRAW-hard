@@ -126,13 +126,14 @@ class ReadSoftAttn(ReadInterface):
 
         Returns
         -------
-        glimpse:    Attention window. (B, N x N)
+        glimpse:    Attention window. (B, N, N, 1)
 		"""
 		Fxt = tf.transpose(Fx, perm = [0, 2, 1])
 		img = tf.squeeze(img, axis=-1) #(B, H, W)
 		glimpse = tf.matmul(Fy, tf.matmul(img, Fxt))
 		glimpse = tf.reshape(glimpse, [-1, self._N * self._N])
 		glimpse = glimpse * tf.reshape(gamma, [-1, 1])
+        glimpse = tf.reshape(glimpse, [-1, self._N, self._N, 1])
 		return glimpse
 
 
@@ -184,6 +185,7 @@ class ReadSoftAttn(ReadInterface):
             # Concatenate the attention windows from all channels to obtain a tensor
             # of shape (B, N x N x C x 2)
             x_combined_glimpse = tf.concat(x_combined_glimpse_channels, -1)
+            x_combined_glimpse = tf.reshape(x_combined_glimpse, [-1, self._N * self._N * self._C * 2])
             return (x_combined_glimpse, ) + visualization_params
 
 class WriteSoftAttn(WriteInterface):
