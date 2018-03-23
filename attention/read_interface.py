@@ -3,10 +3,10 @@ class ReadInterface:
     An abstract class to be implemented by all attention readers.
     """
 
-    self._H = 0 # Height of input images
-    self._W = 0 # Width of input images
-    self._C = 0 # Number of channels in input images and in attention window
-    self._N = 0 # Dimension of square attention window
+    _H = 0 # Height of input images
+    _W = 0 # Width of input images
+    _C = 0 # Number of channels in input images and in attention window
+    _N = 0 # Dimension of square attention window
 
     def __init__(self, height, width, channels, read_n):
         """

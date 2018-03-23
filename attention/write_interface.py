@@ -1,12 +1,14 @@
+import tensorflow as tf
+
 class WriteInterface:
     """
     An abstract class to be implemented by all attention writers.
     """
 
-    self._H = 0 # Height of input images
-    self._W = 0 # Width of input images
-    self._C = 0 # Number of channels in input images and in attention window
-    self._N = 0 # Dimension of square attention window
+    _H = 0 # Height of input images
+    _W = 0 # Width of input images
+    _C = 0 # Number of channels in input images and in attention window
+    _N = 0 # Dimension of square attention window
 
     def __init__(self, height, width, channels, read_n):
         """
@@ -30,7 +32,7 @@ class WriteInterface:
         ------
         w:          Write patch. (B, N, N, C)
         """
-        with tf.variable_scope('w_patch')
+        with tf.variable_scope('w_patch'):
             write_size = self._N * self._N * self._C
             w = tf.contrib.layers.fully_connected(h_dec, write_size, activation_fn=None, scope='fc')
             w = tf.reshape(w, [-1, self._N, self._N, self._C])
