@@ -186,9 +186,11 @@ class ReadSoftAttn(ReadInterface):
             x_combined_glimpse = tf.concat(x_combined_glimpse_channels, -1)
             return (x_combined_glimpse, ) + visualization_params
 
-class WriteInterface:
+class WriteSoftAttn(WriteInterface):
     """
-    An abstract class to be implemented by all attention writers.
+    A class for writing with 'soft' attention as was implmented in the original
+    DRAW paper.
+    This class implements the WriteInterface.
     """
 
     # __init__ is inherited from WriteInterface
