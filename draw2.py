@@ -36,13 +36,11 @@ enc_size = 256  # number of hidden units / output size in LSTM
 dec_size = 256
 read_n = 5  # read glimpse grid width/height
 write_n = 5  # write glimpse grid width/height
-read_size = 2 * read_n * read_n
-write_size = write_n * write_n
 z_size = 10  # QSampler output size
 T = 10  # MNIST generation sequence length
 batch_size = 100  # training minibatch size
 train_iters = 10000
-learning_rate = 1e-2  # learning rate for optimizer
+learning_rate = 1e-3  # learning rate for optimizer
 eps = 1e-8  # epsilon for numerical stability
 
 ## BUILD MODEL ##
@@ -58,6 +56,7 @@ if FLAGS.read_attn == 'no_attn':
 elif FLAGS.read_attn == 'soft_attn':
     reader = ReadSoftAttn(H, W, C, read_n)
 elif FLAGS.read_attn == 'spatial_transformer_attn':
+    read_n = 10
     reader = ReadSpatialTransformerAttn(H, W, C, read_n)
 else:
     print("read_attn parameter was not recognized. Defaulting to 'no_attn'.")
@@ -105,6 +104,7 @@ if FLAGS.write_attn == 'no_attn':
 elif FLAGS.write_attn == 'soft_attn':
     writer = WriteSoftAttn(H, W, C, write_n)
 elif FLAGS.write_attn == 'spatial_transformer_attn':
+    write_n = 10
     writer = WriteSpatialTransformerAttn(H, W, C, write_n)
 else:
     print("write_attn parameter was not recognized. Defaulting to 'no_attn'.")
