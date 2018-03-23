@@ -1,33 +1,41 @@
 #!/usr/bin/env python
 
+
 """"
-Simple implementation of http://arxiv.org/pdf/1502.04623v2.pdf in TensorFlow
+Simple implementation of http://arxiv.org/pdf/1502.04623v2.pdf in TensorFlow with 'hard'
+attention via Spatial Transformer Networks (https://arxiv.org/pdf/1506.02025.pdf).
 
 Example Usage:
-	python draw.py --data_dir=/tmp/draw --read_attn=True --write_attn=True
+    python draw.py --data_dir=/tmp/draw --read_attn=soft_attn --write_attn=soft_attn
 """
 
 import tensorflow as tf
 from tensorflow.examples.tutorials import mnist
 import numpy as np
 import os
+from attention.no_attn import ReadNoAttn, WriteNoAttn
+from attention.soft_attn import ReadSoftAttn, WriteSoftAttn
+from attention.spatial_transformer_attn import ReadSpatialTransformerAttn, WriteSpatialTransformerAttn
 import data_loader
 
 tf.flags.DEFINE_string("data_dir", "", "")
-tf.flags.DEFINE_boolean("read_attn", True, "enable attention for reader")
-tf.flags.DEFINE_boolean("write_attn", True, "enable attention for writer")
+tf.flags.DEFINE_string("read_attn", "no_attn", "Specify type of read attention " +
+    "to use. Options include: 'no_attn', 'soft_attn', 'spatial_transformer_attn'.")
+tf.flags.DEFINE_string("write_attn", "no_attn", "Specify type of write attention " +
+    "to use. Options include: 'no_attn', 'soft_attn', 'spatial_transformer_attn'.")
+tf.flags.DEFINE_string("dataset", "mnist", "Dataset to train the model with." +
+    " Options include: 'mnist'")
+
 FLAGS = tf.flags.FLAGS
 
 ## MODEL PARAMETERS ##
 
-W, H, C = 28, 28, 1  # image width,height,channel
-img_size = H * W * C # the canvas size
+W, H, C = 28, 28, 1  # image width, height
+img_size = H * W  # the canvas size
 enc_size = 256  # number of hidden units / output size in LSTM
 dec_size = 256
 read_n = 5  # read glimpse grid width/height
 write_n = 5  # write glimpse grid width/height
-#read_size = 2 * read_n * read_n if FLAGS.read_attn else 2 * img_size
-write_size = write_n * write_n * C if FLAGS.write_attn else img_size
 z_size = 10  # QSampler output size
 T = 10  # MNIST generation sequence length
 batch_size = 100  # training minibatch size
@@ -37,287 +45,187 @@ eps = 1e-8  # epsilon for numerical stability
 
 ## BUILD MODEL ##
 
-DO_SHARE = None  # workaround for variable_scope(reuse=True)
-
-x = tf.placeholder(tf.float32, shape=(batch_size, H, W, C))
+x = tf.placeholder(tf.float32, shape=(batch_size, H, W, C))  # input
 e = tf.random_normal((batch_size, z_size), mean=0, stddev=1)  # Qsampler noise
 lstm_enc = tf.contrib.rnn.LSTMCell(enc_size, state_is_tuple=True)  # encoder Op
 lstm_dec = tf.contrib.rnn.LSTMCell(dec_size, state_is_tuple=True)  # decoder Op
 
+## READER ##
+if FLAGS.read_attn == 'no_attn':
+    reader = ReadNoAttn(H, W, C, read_n)
+elif FLAGS.read_attn == 'soft_attn':
+    reader = ReadSoftAttn(H, W, C, read_n)
+elif FLAGS.read_attn == 'spatial_transformer_attn':
+    read_n = 10
+    reader = ReadSpatialTransformerAttn(H, W, C, read_n)
+else:
+    print("read_attn parameter was not recognized. Defaulting to 'no_attn'.")
+    reader = ReadNoAttn(H, W, C, read_n)
 
-def linear(x, output_dim):
-	"""
-	affine transformation Wx+b
-	assumes x.shape = (batch_size, num_features)
-	"""
-	w = tf.get_variable("w", [x.get_shape()[1], output_dim])
-	b = tf.get_variable("b", [output_dim],
-						initializer=tf.constant_initializer(0.0))
-	return tf.matmul(x, w) + b
-
-
-def filterbank(gx, gy, sigma2, delta, N):
-	"""
-	Create gaussian attention filters Fx and Fy based on the parameters provided.
-	See the paper for a complete explanation of how these Gaussian filters are
-	generated.
-
-	Parameters:
-	----------
-	gx : x-ccordinate of the center of the grid of attention filters
-
-	gy : y-coordinate of the cnter of the frid of attention filter
-
-	sigma2 : variance of the gaussian filters to use. Larger variance means more
-	contribution from pixels far from the filter center. As variance decreases,
-	it approaches a 'hard' attention approach.
-
-	delta : Spacing between filter centers.
-
-	N : Dimension of the square attention window in pixels. There are N x N
-	gaussian filters used to generate the attention window.
-	"""
-	grid_i = tf.reshape(tf.cast(tf.range(N), tf.float32), [1, -1])
-	mu_x = gx + (grid_i - N / 2 - 0.5) * delta # eq 19
-	mu_y = gy + (grid_i - N / 2 - 0.5) * delta # eq 20
-	a = tf.reshape(tf.cast(tf.range(W), tf.float32), [1, 1, -1])
-	b = tf.reshape(tf.cast(tf.range(H), tf.float32), [1, 1, -1])
-	mu_x = tf.reshape(mu_x, [-1, N, 1])
-	mu_y = tf.reshape(mu_y, [-1, N, 1])
-	sigma2 = tf.reshape(sigma2, [-1, 1, 1])
-	Fx = tf.exp(-tf.square(a - mu_x) / (2*sigma2))
-	Fy = tf.exp(-tf.square(b - mu_y) / (2*sigma2)) # batch x N x H
-	# normalize, sum over W and H dims
-	Fx=Fx/tf.maximum(tf.reduce_sum(Fx,2,keep_dims=True),eps)
-	Fy=Fy/tf.maximum(tf.reduce_sum(Fy,2,keep_dims=True),eps)
-	return Fx,Fy
-
-def attn_window(scope,h_dec,N):
-	with tf.variable_scope(scope,reuse=DO_SHARE):
-		params=linear(h_dec,5)
-	# gx_,gy_,log_sigma2,log_delta,log_gamma=tf.split(1,5,params)
-	gx_,gy_,log_sigma2,log_delta,log_gamma=tf.split(params,5,1)
-	gx=(W+1)/2*(gx_+1)
-	gy=(H+1)/2*(gy_+1)
-	sigma2=tf.exp(log_sigma2)
-	delta=(max(W,H)-1)/(N-1)*tf.exp(log_delta) # batch x N
-	return filterbank(gx,gy,sigma2,delta,N)+(tf.exp(log_gamma),)
-
-## READ ##
-def read_no_attn(x,x_hat,h_dec_prev):
-	x_combined = tf.concat([x, x_hat], -1) # (B, H, W, 2 * C)
-	x_combined_channels = tf.split(x_combined, 2*C, axis=-1) # 2*C tensors of shape (B, H, W, 1)
-	read_features = []
-	for x_combined_channel in x_combined_channels:
-		read_features.append(tf.reshape(x_combined_channel, [batch_size, H * W]))
-	read_features = tf.concat(read_features, -1) # (B, H * W * C * 2)
-	return read_features
-
-def read_attn(x,x_hat,h_dec_prev):
-	Fx,Fy,gamma=attn_window("read",h_dec_prev,read_n)
-	def filter_img(img,Fx,Fy,gamma,N):
-		"""
-		Apply attention filters to image.
-
-		Parameters
-		----------
-		img : Image to apply the filters to. Should have dimensions (B, H, W, 1)
-
-		Fx, Fy: x and y-axis attention filters
-
-		gamma: attenuation constant
-
-		N: Dimension of the square attention window in pixels. N must agree with
-		the dimensions of Fx and Fy
-
-		Returns
-		-------
-		glimpse: Attention window. (B, N x N)
-		"""
-		#print("Fx shape: " + str(Fx.get_shape()))
-		Fxt=tf.transpose(Fx,perm=[0,2,1])
-		# Duplicate filter across all channels.
-		#Fxt = tf.tile(tf.expand_dims(Fxt, -1), [1, 1, 1, C]) # Shape of Fxt: (B, W, N, C)
-		#Fy = tf.tile(tf.expand_dims(Fy, -1), [1, 1, 1, C]) # Shape of F: (B, N, H, C)
-		#img=tf.reshape(img,[-1,H,W])
-		img = tf.squeeze(img, axis=-1) #(B, H, W)
-		glimpse = tf.matmul(Fy,tf.matmul(img,Fxt))
-		glimpse = tf.reshape(glimpse,[-1,N*N])
-		glimpse = glimpse * tf.reshape(gamma,[-1,1])
-		return glimpse
-	x_combined = tf.concat([x, x_hat], -1)
-	# Split channels to obtain array of 2*C tensors, where each tensor has
-	# dimensions (B, H, W, 1):
-	x_combined_channels = tf.split(x_combined, 2*C, axis=-1)
-	x_combined_glimpse_channels = []
-	for x_combined_channel in x_combined_channels:
-		x_combined_glimpse_channels.append(filter_img(x_combined_channel, Fx, Fy, gamma, read_n))
-	# Concatenate the attention windows from all channels to obtain a tensor
-	# of shape (B, N x N x C x 2)
-	x_combined_glimpse = tf.concat(x_combined_glimpse_channels, -1)
-	print("x_combined_glimpse shape is: " + str(x_combined_glimpse.get_shape()))
-	return x_combined_glimpse
-
-read = read_attn if FLAGS.read_attn else read_no_attn
 
 ## ENCODE ##
-def encode(state,input):
-	"""
-	run LSTM
-	state = previous encoder state
-	input = cat(read,h_dec_prev)
-	returns: (output, new_state)
-	"""
-	with tf.variable_scope("encoder",reuse=DO_SHARE):
-		return lstm_enc(input,state)
+
+def encode(state, input):
+    """
+    run LSTM
+    state = previous encoder state
+    input = cat(read,h_dec_prev)
+    returns: (output, new_state)
+    """
+    with tf.variable_scope("encoder"):
+        return lstm_enc(input, state)
+
 
 ## Q-SAMPLER (VARIATIONAL AUTOENCODER) ##
 
 def sampleQ(h_enc):
-	"""
-	Samples Zt ~ normrnd(mu,sigma) via reparameterization trick for normal dist
-	mu is (batch,z_size)
-	"""
-	with tf.variable_scope("mu",reuse=DO_SHARE):
-		mu=linear(h_enc,z_size)
-	with tf.variable_scope("sigma",reuse=DO_SHARE):
-		logsigma=linear(h_enc,z_size)
-		sigma=tf.exp(logsigma)
-	return (mu + sigma*e, mu, logsigma, sigma)
+    """
+    Samples Zt ~ normrnd(mu,sigma) via reparameterization trick for normal dist
+    mu is (batch,z_size)
+    """
+    with tf.variable_scope("Qsampler"):
+        with tf.variable_scope("mu"):
+            mu = tf.contrib.layers.fully_connected(h_enc, z_size, activation_fn=None)
+        with tf.variable_scope("sigma"):
+            logsigma = tf.contrib.layers.fully_connected(h_enc, z_size, activation_fn=None)
+            sigma = tf.exp(logsigma)
+    return (mu + sigma * e, mu, logsigma, sigma)
 
 ## DECODER ##
-def decode(state,input):
-	with tf.variable_scope("decoder",reuse=DO_SHARE):
-		return lstm_dec(input, state)
+
+def decode(state, input):
+    with tf.variable_scope("decoder"):
+        return lstm_dec(input, state)
 
 ## WRITER ##
-def write_no_attn(h_dec):
-	with tf.variable_scope("write",reuse=DO_SHARE):
-		return tf.reshape(linear(h_dec,img_size), [batch_size, H, W, C])
 
-def write_attn(h_dec):
-	"""
-	Predict what should be 'written' and apply attention to generate the canvas
-	update.
+if FLAGS.write_attn == 'no_attn':
+    writer = WriteNoAttn(H, W, C, write_n)
+elif FLAGS.write_attn == 'soft_attn':
+    writer = WriteSoftAttn(H, W, C, write_n)
+elif FLAGS.write_attn == 'spatial_transformer_attn':
+    write_n = 10
+    writer = WriteSpatialTransformerAttn(H, W, C, write_n)
+else:
+    print("write_attn parameter was not recognized. Defaulting to 'no_attn'.")
+    writer = WriteNoAttn(H, W, C, write_n)
 
-	Parameters
-	----------
-	h_dec : Output from LSTM decoder in this time step.
-
-	Return
-	------
-	write_canvas : 	Update to be added to the reconstruction canvas.
-					Has dimensions of (B, H, W, C)
-	"""
-	with tf.variable_scope("writeW",reuse=DO_SHARE):
-		w=linear(h_dec,write_size) # batch x (write_n*write_n)
-	N=write_n
-	w=tf.reshape(w,[batch_size,N,N,C])
-	Fx,Fy,gamma=attn_window("write",h_dec,write_n)
-	Fyt=tf.transpose(Fy,perm=[0,2,1])
-
-	w_channels = tf.split(w, C, axis=-1)
-	wr_channels = []
-	for w_channel in w_channels:
-		wr=tf.matmul(Fyt,tf.matmul(tf.squeeze(w_channel, axis=-1),Fx))
-		wr=tf.reshape(wr,[batch_size,H*W])
-		wr = wr*tf.reshape(1.0/gamma,[-1,1])
-		wr = tf.reshape(wr, [batch_size, H, W, 1])
-		wr_channels.append(wr)
-	wr = tf.concat(wr_channels, -1)
-	print("wr shape is: " + str(wr.get_shape()))
-	return wr
-
-write=write_attn if FLAGS.write_attn else write_no_attn
 
 ## STATE VARIABLES ##
 
-cs=[0]*T # sequence of canvases
-mus,logsigmas,sigmas=[0]*T,[0]*T,[0]*T # gaussian params generated by SampleQ. We will need these for computing loss.
+cs = [0] * T  # sequence of canvases
+# gaussian params generated by SampleQ. We will need these for computing loss.
+mus, logsigmas, sigmas = [0] * T, [0] * T, [0] * T
+# attention window visualization parameters
+r_cxs, r_cys, r_ds, r_thickness = [0] * T, [0] * T, [0] * T, [0] * T
+w_cxs, w_cys, w_ds, w_thickness = [0] * T, [0] * T, [0] * T, [0] * T
+
 # initial states
-h_dec_prev=tf.zeros((batch_size,dec_size))
-enc_state=lstm_enc.zero_state(batch_size, tf.float32)
-dec_state=lstm_dec.zero_state(batch_size, tf.float32)
+h_dec_prev = tf.zeros((batch_size, dec_size))
+enc_state = lstm_enc.zero_state(batch_size, tf.float32)
+dec_state = lstm_dec.zero_state(batch_size, tf.float32)
 
 ## DRAW MODEL ##
 
-# construct the unrolled computational graph
-for t in range(T):
-	c_prev = tf.zeros((batch_size, H, W, C)) if t==0 else cs[t-1]
-	x_hat=x-tf.sigmoid(c_prev) # error image
-	r=read(x,x_hat,h_dec_prev)
-	h_enc,enc_state=encode(enc_state,tf.concat([r,h_dec_prev], 1))
-	z,mus[t],logsigmas[t],sigmas[t]=sampleQ(h_enc)
-	h_dec,dec_state=decode(dec_state,z)
-	cs[t]=c_prev+write(h_dec) # store results
-	h_dec_prev=h_dec
-	DO_SHARE=True # from now on, share variables
+# Construct the unrolled computational graph
+with tf.variable_scope("draw", reuse=tf.AUTO_REUSE):
+    for t in range(T):
+        c_prev = tf.zeros((batch_size, H, W, C)) if t == 0 else cs[t - 1]
+        x_hat = x - tf.sigmoid(c_prev)  # error image
+        r, r_cxs[t], r_cys[t], r_ds[t], r_thickness[t] = reader.read(x, x_hat, h_dec_prev)
+        h_enc, enc_state = encode(enc_state, tf.concat([r, h_dec_prev], 1))
+        z, mus[t], logsigmas[t], sigmas[t] = sampleQ(h_enc)
+        h_dec, dec_state = decode(dec_state, z)
+        w, w_cxs[t], w_cys[t], w_ds[t], w_thickness[t] = writer.write(h_dec)
+        cs[t] = c_prev + w
+        h_dec_prev = h_dec
+
 
 ## LOSS FUNCTION ##
 
-def binary_crossentropy(t,o):
-	return -(t*tf.log(o+eps) + (1.0-t)*tf.log(1.0-o+eps))
+def binary_crossentropy(t, o):
+    return -(t * tf.log(o + eps) + (1.0 - t) * tf.log(1.0 - o + eps))
 
-# reconstruction term appears to have been collapsed down to a single scalar value (rather than one per item in minibatch)
-x_recons=tf.nn.sigmoid(cs[-1])
 
-# after computing binary cross entropy, sum across features then take the mean of those sums across minibatches
-Lx=tf.reduce_sum(binary_crossentropy(x,x_recons), [1, 2]) # reconstruction term
-Lx=tf.reduce_mean(Lx)
+# reconstruction term appears to have been collapsed down to a single scalar
+# value (rather than one per item in minibatch)
+x_recons = tf.nn.sigmoid(cs[-1])
 
-kl_terms=[0]*T
+# After computing binary cross entropy, sum across features then take the mean
+# of those sums across minibatches
+Lx = tf.reduce_sum(binary_crossentropy(x, x_recons), [1, 2])  # reconstruction term
+Lx = tf.reduce_mean(Lx)
+
+kl_terms = [0] * T
 for t in range(T):
-	mu2=tf.square(mus[t])
-	sigma2=tf.square(sigmas[t])
-	logsigma=logsigmas[t]
-	kl_terms[t]=0.5*tf.reduce_sum(mu2+sigma2-2*logsigma,1)-.5 # each kl term is (1xminibatch)
-KL=tf.add_n(kl_terms) # this is 1xminibatch, corresponding to summing kl_terms from 1:T
-Lz=tf.reduce_mean(KL) # average over minibatches
+    mu2 = tf.square(mus[t])
+    sigma2 = tf.square(sigmas[t])
+    logsigma = logsigmas[t]
+    # each kl term is (1xminibatch)
+    kl_terms[t] = 0.5 * tf.reduce_sum(mu2 + sigma2 - 2 * logsigma, 1) - .5
+# this is 1xminibatch, corresponding to summing kl_terms from 1:T
+KL = tf.add_n(kl_terms)
+Lz = tf.reduce_mean(KL)  # average over minibatches
 
-cost=Lx+Lz
+cost = Lx + Lz
 
 ## OPTIMIZER ##
 
-optimizer=tf.train.AdamOptimizer(learning_rate, beta1=0.5)
-grads=optimizer.compute_gradients(cost)
-for i,(g,v) in enumerate(grads):
-	if g is not None:
-		grads[i]=(tf.clip_by_norm(g,5),v) # clip gradients
-train_op=optimizer.apply_gradients(grads)
+optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
+grads = optimizer.compute_gradients(cost)
+for i, (g, v) in enumerate(grads):
+    if g is not None:
+        grads[i] = (tf.clip_by_norm(g, 5), v)  # clip gradients
+train_op = optimizer.apply_gradients(grads)
 
 ## RUN TRAINING ##
-mnist_data = data_loader.MNISTLoader(FLAGS.data_dir)
 
+# Select dataset:
+if FLAGS.dataset == 'mnist':
+    data = data_loader.MNISTLoader(FLAGS.data_dir)
+else:
+    print("dataset parameter was not recognized. Defaulting to 'mnist'.")
+    data = data_loader.MNISTLoader(FLAGS.data_dir)
 
-fetches=[]
-fetches.extend([Lx,Lz,train_op])
-Lxs=[0]*train_iters
-Lzs=[0]*train_iters
+fetches = []
+fetches.extend([Lx, Lz, train_op])
+Lxs = [0] * train_iters
+Lzs = [0] * train_iters
 
-sess=tf.InteractiveSession()
+sess = tf.InteractiveSession()
 
-saver = tf.train.Saver() # saves variables learned during training
+saver = tf.train.Saver()  # saves variables learned during training
 tf.global_variables_initializer().run()
 # saver.restore(sess, "/tmp/draw/drawmodel.ckpt") # to restore from model, uncomment this line
 
 for i in range(train_iters):
-	xtrain = mnist_data.next_train_batch(batch_size) # xtrain is (batch_size x img_size)
-	feed_dict={x:xtrain}
-	results=sess.run(fetches,feed_dict)
-	Lxs[i],Lzs[i],_=results
-	if i%100==0:
-		print("iter=%d : Lx: %f Lz: %f" % (i,Lxs[i],Lzs[i]))
+    # xtrain is (batch_size x img_size)
+    xtrain = data.next_train_batch(batch_size)
+    feed_dict = {x: xtrain}
+    results = sess.run(fetches, feed_dict)
+    Lxs[i], Lzs[i], _ = results
+    if i % 100 == 0:
+        print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
 
 ## TRAINING FINISHED ##
+# Generate some examples
+canvases, r_cx, r_cy, r_d, r_thick, w_cx, w_cy, w_d, w_thick = sess.run(
+    [cs, r_cxs, r_cys, r_ds, r_thickness, w_cxa, w_cys, w_ds, w_thickness], feed_dict)
+canvases = np.array(canvases)  # T x B x H x W x C
+r_cx = np.array(r_cx)
+r_cy = np.array(r_cy)
+r_d = np.array(r_d)
+r_thick = np.array(r_thick)
+w_cx = np.array(r_cx)
+w_cy = np.array(r_cy)
+w_d = np.array(r_d)
+w_thick = np.array(r_thick)
 
-canvases=sess.run(cs,feed_dict) # generate some examples
-canvases=np.array(canvases) # T x batch x img_size
-
-out_file=os.path.join(FLAGS.data_dir,"draw_data.npy")
-np.save(out_file,[canvases,Lxs,Lzs])
+out_file = os.path.join(FLAGS.data_dir, "draw_data.npy")
+np.save(out_file, [canvases, r_cx, r_cy, r_d, r_thick, w_cx, w_cy, w_d, w_thick, Lxs, Lzs])
 print("Outputs saved in file: %s" % out_file)
 
-ckpt_file=os.path.join(FLAGS.data_dir,"drawmodel.ckpt")
-print("Model saved in file: %s" % saver.save(sess,ckpt_file))
+ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
+print("Model saved in file: %s" % saver.save(sess, ckpt_file))
 
 sess.close()
