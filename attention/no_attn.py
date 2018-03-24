@@ -50,10 +50,11 @@ class ReadNoAttn(ReadInterface):
 		read_features = tf.reshape(x_combined, [-1, self._H * self._W * self._C * 2])
 
 		## Determine appropriate parameters for attention visualization:
-		cx = (self._W + 1) / 2
-		cy = (self._H + 1) / 2
-		d = min(self._H, self._W) # This is going to be wrong if the image isn't square
-		thickness = 1.0 # Arbitrary value to be updated
+		batch_size = x.get_shape()[0]
+		cx = tf.constant((self._W + 1) / 2, shape=[batch_size])
+		cy = tf.constant((self._H + 1) / 2, shape=[batch_size])
+		d = tf.constant(min(self._H, self._W), shape=[batch_size]) # This is going to be wrong if the image isn't square
+		thickness = tf.constant(1.0, shape=[batch_size]) # Arbitrary value to be updated
 
 		return read_features, cx, cy, d, thickness
 
@@ -124,9 +125,10 @@ class WriteNoAttn(WriteInterface):
 			w = self._generate_write_patch(h_dec)
 
 			## Determine appropriate parameters for attention visualization:
-			cx = (self._W + 1) / 2
-			cy = (self._H + 1) / 2
-			d = min(self._H, self._W) # This is going to be wrong if the image isn't square
-			thickness = 1.0 # Arbitrary value to be updated
+			batch_size = w.get_shape()[0]
+			cx = tf.constant((self._W + 1) / 2, shape=[batch_size])
+			cy = tf.constant((self._H + 1) / 2, shape=[batch_size])
+			d = tf.constant(min(self._H, self._W), shape=[batch_size]) # This is going to be wrong if the image isn't square
+			thickness = tf.constant(1.0, shape=[batch_size]) # Arbitrary value to be updated
 
 			return w, cx, cy, d, thickness

@@ -39,7 +39,7 @@ write_n = 5  # write glimpse grid width/height
 z_size = 10  # QSampler output size
 T = 10  # MNIST generation sequence length
 batch_size = 100  # training minibatch size
-train_iters = 10000
+train_iters = 100
 learning_rate = 1e-3  # learning rate for optimizer
 eps = 1e-8  # epsilon for numerical stability
 
@@ -210,7 +210,7 @@ for i in range(train_iters):
 ## TRAINING FINISHED ##
 # Generate some examples
 canvases, r_cx, r_cy, r_d, r_thick, w_cx, w_cy, w_d, w_thick = sess.run(
-    [cs, r_cxs, r_cys, r_ds, r_thickness, w_cxa, w_cys, w_ds, w_thickness], feed_dict)
+    [cs, r_cxs, r_cys, r_ds, r_thickness, w_cxs, w_cys, w_ds, w_thickness], feed_dict)
 canvases = np.array(canvases)  # T x B x H x W x C
 r_cx = np.array(r_cx)
 r_cy = np.array(r_cy)
