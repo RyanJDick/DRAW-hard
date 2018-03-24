@@ -33,15 +33,16 @@ def draw_attention_box(img, attn_params, colour):
 	# Calculate boundary pixel values of all edges of the square:
 	# 'out' pixel values are inclusive
 	# 'in' pixel values are exclusive
-	y_top_out = max(0, int(cy - (d / 2) - thickness))
-	y_top_in = int(y_top_out + thickness)
-	y_bottom_out = min(H - 1, int(cy + (d / 2) + thickness))
-	y_bottom_in = int(y_bottom_out - thickness)
+	thickness = max(int(thickness), 1)
+	y_top_out = np.clip(int(cy) - int(d / 2) - thickness, 0, H - 1)
+	y_top_in = np.clip(y_top_out + thickness, 0, H - 1)
+	y_bottom_out = np.clip(int(cy) + int(d / 2) + thickness, 0, H - 1)
+	y_bottom_in = np.clip(y_bottom_out - thickness, 0, H - 1)
 
-	x_left_out = max(0 , int(cx - (d / 2) - thickness))
-	x_left_in = int(x_left_out + thickness)
-	x_right_out = min(W - 1, int(cx + (d / 2) + thickness))
-	x_right_in = int(x_right_out - thickness)
+	x_left_out = np.clip(int(cx) - int(d / 2) - thickness, 0, W - 1)
+	x_left_in = np.clip(x_left_out + thickness, 0, W - 1)
+	x_right_out = np.clip(int(cx) + int(d / 2) + thickness, 0, W - 1)
+	x_right_in = np.clip(x_right_out - thickness, 0, W - 1)
 
 	# Draw top line:
 	for x in range(x_left_out, x_right_out + 1):
@@ -104,6 +105,16 @@ def xrecons_grid(X, read_attn_params, write_attn_params):
 			img[startr:endr, startc:endc, :] = X[i, j, :, :, :]
 	return img
 
+def sigmoid(x):
+    """
+	Numerically stable sigmoid function (avoids exp overflow)
+	"""
+    if x >= 0:
+        z = np.exp(-x)
+        return 1.0 / (1.0 + z)
+    else:
+        z = np.exp(x)
+        return z / (1.0 + z)
 
 if __name__ == '__main__':
 	prefix = sys.argv[1]
@@ -116,9 +127,11 @@ if __name__ == '__main__':
 	write_attn_params = np.array([w_cx, w_cy, w_d, w_thick]) # Shape (num_params, T, batch_size)
 	write_attn_params = np.swapaxes(write_attn_params, 0, 1) # Shape: (T, num_params, batch_size)
 	write_attn_params = np.swapaxes(write_attn_params, 1, 2) # Shape: (T, batch_size, num_params)
-	
+
 	T, batch_size, H, W, C = img.shape
-	X = 1.0 / (1.0 + np.exp(-img))  # x_recons=sigmoid(canvas)
+	sigmoid_func = np.vectorize(sigmoid)
+
+	X = sigmoid_func(img)  # x_recons=sigmoid(canvas)
 
 	# If the image is grayscale, convert to 3-channel (RGB) so that attention
 	# rectangles can be drawn for visualization:
