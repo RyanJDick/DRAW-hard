@@ -54,7 +54,7 @@ class ReadNoAttn(ReadInterface):
 		cx = tf.constant((self._W + 1) / 2, shape=[batch_size])
 		cy = tf.constant((self._H + 1) / 2, shape=[batch_size])
 		d = tf.constant(min(self._H, self._W), shape=[batch_size]) # This is going to be wrong if the image isn't square
-		thickness = tf.constant(1.0, shape=[batch_size]) # Arbitrary value to be updated
+		thickness = tf.constant(1.0, shape=[batch_size])
 
 		return read_features, cx, cy, d, thickness
 

@@ -114,10 +114,11 @@ class ReadSpatialTransformerAttn(ReadInterface):
 				x_window = tf.reshape(x_window, [-1, self._N * self._N * self._C * 2])
 
 			## Determine attention visualization parameters
+			batch_size = x.get_shape()[0]
 			cx = (self._W / 2) + tx * (self._W / 2)
 			cy = (self._H / 2) + ty * (self._H / 2)
 			d = s * self._W # Assumes that image is a square
-			thickness = 1.0
+			thickness = tf.constant(1.0, shape=[batch_size])
 
 			return x_window, cx, cy, d, thickness
 
@@ -178,9 +179,10 @@ class WriteSpatialTransformerAttn(WriteInterface):
 				canvas = transformer(w, transformation_mat, [self._H, self._W])
 
 			## Determine attention visualization parameters
+			batch_size = w.get_shape()[0]
 			cx = (self._W / 2) + tx * (self._W / 2)
 			cy = (self._H / 2) + ty * (self._H / 2)
 			d = s * self._W # Assumes that image is a square
-			thickness = 1.0
+			thickness = tf.constant(1.0, shape=[batch_size])
 
 			return canvas, cx, cy, d, thickness

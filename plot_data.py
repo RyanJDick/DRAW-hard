@@ -82,7 +82,7 @@ def xrecons_grid(X, read_attn_params, write_attn_params):
 	batch_size, H, W, C = X.shape
 
 	padsize = 1
-	padval = .5
+	padval = 1.0
 	ph = H + 2 * padsize  # Padded height
 	pw = W + 2 * padsize  # Padded width
 
