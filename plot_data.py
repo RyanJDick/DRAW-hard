@@ -10,7 +10,7 @@ matplotlib.use('Agg')  # Force matplotlib to not use any Xwindows backend.
 import matplotlib.pyplot as plt
 
 read_attn = True
-write_attn = False
+write_attn = True
 
 def draw_attention_box(img, attn_params, colour):
 	"""
@@ -101,7 +101,7 @@ def xrecons_grid(X, read_attn_params, write_attn_params):
 			if read_attn:
 				draw_attention_box(X[i, j, :, :, :], read_attn_params[k, :], np.array([1.0, 0.0, 0.0]))
 			if write_attn:
-				draw_attention_box(X[i, j, :, :, :], write_attn_params[K, :], np.array([0.0, 1.0, 0.0]))
+				draw_attention_box(X[i, j, :, :, :], write_attn_params[k, :], np.array([0.0, 1.0, 0.0]))
 			img[startr:endr, startc:endc, :] = X[i, j, :, :, :]
 	return img
 
