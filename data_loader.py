@@ -95,8 +95,8 @@ class MNISTLoader(DataLoader):
         data -  numpy array of size (B x 28 x 28 x 1) where each entry is a
         binary value (0 or 1)
         """
-        _cur_test_index += batch_size
-        if _cur_test_index > _num_test_images:
+        self._cur_test_index += batch_size
+        if self._cur_test_index > self._num_test_images:
             return None
         x_test, _ = self._test_data.next_batch(batch_size)
         # x_test is a 1D vector, reshape to image dimensions with single channel

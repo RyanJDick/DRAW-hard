@@ -25,6 +25,7 @@ tf.flags.DEFINE_string("write_attn", "no_attn", "Specify type of write attention
     "to use. Options include: 'no_attn', 'soft_attn', 'spatial_transformer_attn'.")
 tf.flags.DEFINE_string("dataset", "mnist", "Dataset to train the model with." +
     " Options include: 'mnist'")
+tf.flags.DEFINE_boolean("test", True, "Evaluate the model after training.")
 
 FLAGS = tf.flags.FLAGS
 
@@ -207,8 +208,25 @@ for i in range(train_iters):
     if i % 100 == 0:
         print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
 
+## SAVE TRAINED MODEL PARAMS ##
+ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
+print("Model saved in file: %s" % saver.save(sess, ckpt_file))
+
+## TEST TRAINED MODEL ##
+if FLAGS.test :
+    xtest = data.next_test_batch(batch_size)
+    batch = 0
+    test_nll = 0
+    print("Testing trained model:")
+    while xtest is not None:
+        batch += 1
+        feed_dict = {x: xtest}
+        test_nll += sess.run(Lx, feed_dict)
+        print("Test samples: " + str(batch * batch_size) + ", Mean NLL: " + str(test_nll / batch))
+        xtest = data.next_test_batch(batch_size)
+
 ## TRAINING FINISHED ##
-# Generate some examples
+# Generate some examples for visualization
 canvases, r_cx, r_cy, r_d, r_thick, w_cx, w_cy, w_d, w_thick = sess.run(
     [cs, r_cxs, r_cys, r_ds, r_thickness, w_cxs, w_cys, w_ds, w_thickness], feed_dict)
 canvases = np.array(canvases)  # T x B x H x W x C
@@ -224,8 +242,5 @@ w_thick = np.array(w_thick)
 out_file = os.path.join(FLAGS.data_dir, "draw_data.npy")
 np.save(out_file, [canvases, r_cx, r_cy, r_d, r_thick, w_cx, w_cy, w_d, w_thick, Lxs, Lzs])
 print("Outputs saved in file: %s" % out_file)
-
-ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
-print("Model saved in file: %s" % saver.save(sess, ckpt_file))
 
 sess.close()
