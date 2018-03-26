@@ -1,5 +1,5 @@
 # takes data saved by DRAW model and generates animations
-# example usage: python plot_data.py noattn /tmp/draw/draw_data.npy
+# example usage: python plot_data.py noattn /tmp/draw/draw_data.npz
 
 import matplotlib
 import sys
@@ -119,7 +119,16 @@ def sigmoid(x):
 if __name__ == '__main__':
 	prefix = sys.argv[1]
 	out_file = sys.argv[2]
-	[img, r_cx, r_cy, r_d, r_thick, w_cx, w_cy, w_d, w_thick, Lxs, Lzs] = np.load(out_file)
+	data_dict = np.load(out_file)
+	img = data_dict['img']
+	r_cx = data_dict['r_cx']
+	r_cy = data_dict['r_cy']
+	r_d = data_dict['r_d']
+	r_thick = data_dict['r_thick']
+	w_cx = data_dict['w_cx']
+	w_cy = data_dict['w_cy']
+	w_d = data_dict['w_d']
+	w_thick = data_dict['w_thick']
 	read_attn_params = np.array([r_cx, r_cy, r_d, r_thick]) # Shape (num_params, T, batch_size)
 	read_attn_params = np.swapaxes(read_attn_params, 0, 1) # Shape: (T, num_params, batch_size)
 	read_attn_params = np.swapaxes(read_attn_params, 1, 2) # Shape: (T, batch_size, num_params)
@@ -145,7 +154,7 @@ if __name__ == '__main__':
 		imgname = '%s_%d.png' % (prefix, t)
 		imsave(imgname, img)
 		print(imgname)
-
+	'''
 	# Plot training loss
 	f = plt.figure()
 	plt.plot(Lxs, label='Reconstruction Loss Lx')
@@ -153,3 +162,4 @@ if __name__ == '__main__':
 	plt.xlabel('iterations')
 	plt.legend()
 	plt.savefig('%s_loss.png' % (prefix))
+	'''
