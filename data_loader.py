@@ -86,7 +86,7 @@ class MNISTLoader(DataLoader):
     def next_test_batch(self, batch_size):
         """
         Returns next test batch of size batch_size. If the end of the test set
-        has been reached, return NULL.
+        has been reached, return None, and reset to start of test set.
 
         Params:
         batch_size - int: Number of data points to return.
@@ -97,6 +97,7 @@ class MNISTLoader(DataLoader):
         """
         self._cur_test_index += batch_size
         if self._cur_test_index > self._num_test_images:
+            self._cur_test_index = 0
             return None
         x_test, _ = self._test_data.next_batch(batch_size)
         # x_test is a 1D vector, reshape to image dimensions with single channel
