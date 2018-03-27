@@ -35,7 +35,7 @@ class ReadInterface:
 
         Return
         ------
-        (attention_window, cx, cy, d, thickness)
+        (attention_window, [cx, cy, d, thickness])
 
         attention_window :  Tensor containing the attention window. Has shape of
                             (B, _N x _N x C x 2)

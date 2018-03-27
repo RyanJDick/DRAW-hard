@@ -50,7 +50,7 @@ class WriteInterface:
 
         Return
         ------
-        (attention_window, cx, cy, d, thickness)
+        (attention_window, [cx, cy, d, thickness])
 
         write_canvas :      Tensor containing the update to be added to the
                             reconstruction canvas. Attention is used to generate

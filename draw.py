@@ -151,7 +151,7 @@ class DRAW:
         """
         with tf.variable_scope("encoder"):
             x_hat = self.x - tf.sigmoid(c_prev)  # error image
-            r, self.r_cxs[t], self.r_cys[t], self.r_ds[t], self.r_thickness[t] = reader.read(self.x, x_hat, h_dec_prev)
+            r, self.read_params[t] = reader.read(self.x, x_hat, h_dec_prev)
             with tf.variable_scope("encoder_lstm"):
                 h_enc, enc_state = lstm_enc(tf.concat([r, h_dec_prev], 1), enc_state)
             z, self.mus[t], self.logsigmas[t], self.sigmas[t] = self._sampleQ(h_enc, e)
@@ -187,7 +187,7 @@ class DRAW:
         with tf.variable_scope("decoder"):
             with tf.variable_scope("decoder_lstm"):
                 h_dec, dec_state = lstm_dec(z, dec_state)
-            w, self.w_cxs[t], self.w_cys[t], self.w_ds[t], self.w_thickness[t] = writer.write(h_dec)
+            w, self.write_params[t] = writer.write(h_dec)
             return (w, h_dec, dec_state)
 
     def restore_from_ckpt(self, sess, ckpt_file):
@@ -218,8 +218,8 @@ class DRAWFullModel(DRAW):
         self.mus, self.logsigmas, self.sigmas = [0] * self.T, [0] * self.T, [0] * self.T
 
         # Attention window visualization parameters
-        self.r_cxs, self.r_cys, self.r_ds, self.r_thickness = [0] * self.T, [0] * self.T, [0] * self.T, [0] * self.T
-        self.w_cxs, self.w_cys, self.w_ds, self.w_thickness = [0] * self.T, [0] * self.T, [0] * self.T, [0] * self.T
+        self.read_params = [0] * self.T
+        self.write_params = [0] * self.T
 
         # initial states
         h_dec_prev = tf.zeros((self.batch_size, self.dec_size))
@@ -295,12 +295,10 @@ class DRAWFullModel(DRAW):
 
         Return:
         -------
-        (cs, r_cxs, r_cys, r_ds, r_thickness, w_cxs, w_cys, w_ds, w_thickness)
+        (cs, read_params, write_params)
         """
         feed_dict = {self.x: batch}
-        result = sess.run([self.cs, self.r_cxs, self.r_cys, self.r_ds,
-                            self.r_thickness, self.w_cxs, self.w_cys, self.w_ds,
-                            self.w_thickness], feed_dict)
+        result = sess.run([self.cs, self.read_params, self.write_params], feed_dict)
         return result
 
     def save_ckpt(self, sess, ckpt_file):
@@ -327,7 +325,7 @@ class DRAWGenerativeModel(DRAW):
         self.cs = [0] * self.T  # Sequence of canvases
 
         # Attention window visualization parameters
-        self.w_cxs, self.w_cys, self.w_ds, self.w_thickness = [0] * self.T, [0] * self.T, [0] * self.T, [0] * self.T
+        self.write_params = [0] * self.T
 
         # Initial state
         dec_state = lstm_dec.zero_state(self.batch_size, tf.float32)
@@ -347,7 +345,4 @@ class DRAWGenerativeModel(DRAW):
 
 
     def generate_images(self, sess):
-        return sess.run([self.cs, self.w_cxs, self.w_cys, self.w_ds, self.w_thickness])
-
-
-    #decoder_variables=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="draw/decoder")
+        return sess.run([self.cs, self.write_params])

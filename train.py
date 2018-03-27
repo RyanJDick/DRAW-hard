@@ -30,7 +30,7 @@ FLAGS = tf.flags.FLAGS
 
 ## TRAINING PARAMETERS ##
 batch_size = 100  # training minibatch size
-train_iters = 10000
+train_iters = 50
 
 ## CREATE MODEL ##
 model = draw.DRAWFullModel(FLAGS.read_attn, FLAGS.write_attn)

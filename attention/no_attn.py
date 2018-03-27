@@ -28,7 +28,7 @@ class ReadNoAttn(ReadInterface):
 
 		Return
 		------
-		(attention_window, cx, cy, d, thickness)
+		(attention_window, [cx, cy, d, thickness])
 
 		attention_window :  Tensor containing the attention window. Has shape of
 							(B, _N x _N x C x 2)
@@ -56,7 +56,7 @@ class ReadNoAttn(ReadInterface):
 		d = tf.constant(min(self._H, self._W), shape=[batch_size]) # This is going to be wrong if the image isn't square
 		thickness = tf.constant(1.0, shape=[batch_size])
 
-		return read_features, cx, cy, d, thickness
+		return read_features, [cx, cy, d, thickness]
 
 class WriteNoAttn(WriteInterface):
 	"""
@@ -100,7 +100,7 @@ class WriteNoAttn(WriteInterface):
 
 		Return
 		------
-		(attention_window, cx, cy, d, thickness)
+		(attention_window, [cx, cy, d, thickness])
 
 		write_canvas :      Tensor containing the update to be added to the
 							reconstruction canvas. Attention is used to generate
@@ -131,4 +131,4 @@ class WriteNoAttn(WriteInterface):
 			d = tf.constant(min(self._H, self._W), shape=[batch_size]) # This is going to be wrong if the image isn't square
 			thickness = tf.constant(1.0, shape=[batch_size]) # Arbitrary value to be updated
 
-			return w, cx, cy, d, thickness
+			return w, [cx, cy, d, thickness]

@@ -1,5 +1,5 @@
 # takes data saved by DRAW model and generates animations
-# example usage: python plot_data.py noattn /tmp/draw/draw_data.npz
+# example usage: python visualize_recons.py noattn /tmp/draw/draw_examples.npz
 
 import matplotlib
 import sys
@@ -120,21 +120,12 @@ if __name__ == '__main__':
 	prefix = sys.argv[1]
 	out_file = sys.argv[2]
 	data_dict = np.load(out_file)
-	img = data_dict['img']
-	r_cx = data_dict['r_cx']
-	r_cy = data_dict['r_cy']
-	r_d = data_dict['r_d']
-	r_thick = data_dict['r_thick']
-	w_cx = data_dict['w_cx']
-	w_cy = data_dict['w_cy']
-	w_d = data_dict['w_d']
-	w_thick = data_dict['w_thick']
-	read_attn_params = np.array([r_cx, r_cy, r_d, r_thick]) # Shape (num_params, T, batch_size)
-	read_attn_params = np.swapaxes(read_attn_params, 0, 1) # Shape: (T, num_params, batch_size)
+	img = data_dict['img'] # Shape: (T, batch_size, H, W, C)
+
+	read_attn_params = data_dict['r_params'] # Shape: (T, num_params, batch_size)
 	read_attn_params = np.swapaxes(read_attn_params, 1, 2) # Shape: (T, batch_size, num_params)
 
-	write_attn_params = np.array([w_cx, w_cy, w_d, w_thick]) # Shape (num_params, T, batch_size)
-	write_attn_params = np.swapaxes(write_attn_params, 0, 1) # Shape: (T, num_params, batch_size)
+	write_attn_params = data_dict['w_params'] # Shape: (T, num_params, batch_size)
 	write_attn_params = np.swapaxes(write_attn_params, 1, 2) # Shape: (T, batch_size, num_params)
 
 	T, batch_size, H, W, C = img.shape

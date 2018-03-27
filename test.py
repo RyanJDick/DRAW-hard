@@ -64,18 +64,12 @@ with tf.Session() as sess:
     # attention behaviour.
 
     xtest = data.next_test_batch(batch_size)
-    canvases, r_cx, r_cy, r_d, r_thick, w_cx, w_cy, w_d, w_thick = model.generate_examples(sess, xtest)
+    canvases, r_params, w_params = model.generate_examples(sess, xtest)
 
     canvases = np.array(canvases)  # T x B x H x W x C
-    r_cx = np.array(r_cx)
-    r_cy = np.array(r_cy)
-    r_d = np.array(r_d)
-    r_thick = np.array(r_thick)
-    w_cx = np.array(w_cx)
-    w_cy = np.array(w_cy)
-    w_d = np.array(w_d)
-    w_thick = np.array(w_thick)
+    r_params = np.array(r_params)
+    w_params = np.array(w_params)
 
     out_file = os.path.join(FLAGS.data_dir, "draw_examples.npz")
-    np.savez(out_file, img=canvases, r_cx=r_cx, r_cy=r_cy, r_d=r_d, r_thick=r_thick, w_cx=w_cx, w_cy=w_cy, w_d=w_d, w_thick=w_thick)
+    np.savez(out_file, img=canvases, r_params=r_params, w_params=w_params)
     print("Outputs saved in file: %s" % out_file)

@@ -71,7 +71,7 @@ def attn_window(scope, h_dec, H, W, N):
 
 	Return
 	------
-	(Fx, Fy, gamma, (cx, cy, d, thickness))
+	(Fx, Fy, gamma, [cx, cy, d, thickness])
 
 	Fx, Fy:     x and y axis Gaussian attention filters produced by
 				filterbank(gx, gy, sigma2, delta, N).
@@ -104,7 +104,7 @@ def attn_window(scope, h_dec, H, W, N):
 		# Thickness of illustrated attention regions varies linearly with filter variance
 		thickness = 1.0 * sigma2
 
-		return Fx, Fy, gamma, (cx, cy, d, thickness)
+		return Fx, Fy, gamma, [cx, cy, d, thickness]
 
 
 class ReadSoftAttn(ReadInterface):
@@ -160,7 +160,7 @@ class ReadSoftAttn(ReadInterface):
 
 		Return
 		------
-		(attention_window, cx, cy, d, thickness)
+		(attention_window, [cx, cy, d, thickness])
 
 		attention_window :  Tensor containing the attention window. Has shape of
 							(B, _N x _N x C x 2)
@@ -191,7 +191,7 @@ class ReadSoftAttn(ReadInterface):
 			# of shape (B, N x N x C x 2)
 			x_combined_glimpse = tf.concat(x_combined_glimpse_channels, -1)
 			x_combined_glimpse = tf.reshape(x_combined_glimpse, [-1, self._N * self._N * self._C * 2])
-			return (x_combined_glimpse, ) + visualization_params
+			return x_combined_glimpse, visualization_params
 
 class WriteSoftAttn(WriteInterface):
 	"""
@@ -213,7 +213,7 @@ class WriteSoftAttn(WriteInterface):
 
 		Return
 		------
-		(attention_window, cx, cy, d, thickness)
+		(attention_window, [cx, cy, d, thickness])
 
 		write_canvas :      Tensor containing the update to be added to the
 							reconstruction canvas. Attention is used to generate
@@ -249,4 +249,4 @@ class WriteSoftAttn(WriteInterface):
 				wr = tf.reshape(wr, [-1, self._H, self._W, 1])
 				wr_channels.append(wr)
 			wr = tf.concat(wr_channels, -1)
-			return (wr, ) + visualization_params
+			return wr, visualization_params

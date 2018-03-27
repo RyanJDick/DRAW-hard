@@ -36,15 +36,11 @@ with tf.Session() as sess:
     ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
     model.restore_from_ckpt(sess, ckpt_file)
 
-    canvases, w_cx, w_cy, w_d, w_thick = model.generate_images(sess)
+    canvases, w_params = model.generate_images(sess)
 
-    canvases = np.array(canvases)  # T x B x H x W x C
-    print("Canvas size is : " + str(canvases.shape))
-    w_cx = np.array(w_cx)
-    w_cy = np.array(w_cy)
-    w_d = np.array(w_d)
-    w_thick = np.array(w_thick)
+    canvases = np.array(canvases) # T x B x H x W x C
+    w_params = np.array(w_params) # T x B x num_w_params
 
     out_file = os.path.join(FLAGS.data_dir, "draw_generated_images.npz")
-    np.savez(out_file, img=canvases, w_cx=w_cx, w_cy=w_cy, w_d=w_d, w_thick=w_thick)
+    np.savez(out_file, img=canvases, w_params=w_params)
     print("Images saved in file: %s" % out_file)

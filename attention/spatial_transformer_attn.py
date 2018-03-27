@@ -87,7 +87,7 @@ class ReadSpatialTransformerAttn(ReadInterface):
 
 		Return
 		------
-		(attention_window, cx, cy, d, thickness)
+		(attention_window, [cx, cy, d, thickness])
 
 		attention_window :  Tensor containing the attention window. Has shape of
 							(B, _N x _N x C x 2)
@@ -120,7 +120,7 @@ class ReadSpatialTransformerAttn(ReadInterface):
 			d = s * self._W # Assumes that image is a square
 			thickness = tf.constant(1.0, shape=[batch_size])
 
-			return x_window, cx, cy, d, thickness
+			return x_window, [cx, cy, d, thickness]
 
 
 class WriteSpatialTransformerAttn(WriteInterface):
@@ -142,7 +142,7 @@ class WriteSpatialTransformerAttn(WriteInterface):
 
 		Return
 		------
-		(attention_window, cx, cy, d, thickness)
+		(attention_window, [cx, cy, d, thickness])
 
 		write_canvas :      Tensor containing the update to be added to the
 							reconstruction canvas. Attention is used to generate
@@ -185,4 +185,4 @@ class WriteSpatialTransformerAttn(WriteInterface):
 			d = s * self._W # Assumes that image is a square
 			thickness = tf.constant(1.0, shape=[batch_size])
 
-			return canvas, cx, cy, d, thickness
+			return canvas, [cx, cy, d, thickness]
