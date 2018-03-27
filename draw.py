@@ -190,6 +190,12 @@ class DRAW:
             w, self.w_cxs[t], self.w_cys[t], self.w_ds[t], self.w_thickness[t] = writer.write(h_dec)
             return (w, h_dec, dec_state)
 
+    def restore_from_ckpt(self, sess, ckpt_file):
+        self.saver.restore(sess, ckpt_file)
+        print("Model restored from: " + ckpt_file)
+
+    def initialize_variables(self):
+        tf.global_variables_initializer().run()
 
 ### DRAW Full Model (Encoder and Decoder) ###
 class DRAWFullModel(DRAW):
@@ -231,12 +237,11 @@ class DRAWFullModel(DRAW):
 
             self.Lx, self.Lz = self._loss(self.x, self.cs[-1], self.mus, self.sigmas, self.logsigmas)
             cost = self.Lx + self.Lz
+        with tf.variable_scope("optimizer"):
             self.train_op = self._optimizer(cost)
 
+        # Full saver:
         self.saver = tf.train.Saver()
-
-    def initialize_variables(self):
-        tf.global_variables_initializer().run()
 
     def train_batch(self, sess, batch):
         """
@@ -302,10 +307,47 @@ class DRAWFullModel(DRAW):
         filename = self.saver.save(sess, ckpt_file)
         print("Model saved in file: " + filename)
 
-    def restore_from_ckpt(self, sess, ckpt_file):
-        self.saver.restore(sess, ckpt_file)
-        print("Model restored from: " + ckpt_file)
+
 
 ### DRAW Generative Model (Decoder Only) ###
+class DRAWGenerativeModel(DRAW):
+    def __init__(self, write_attn):
+        self.write_attn = write_attn
+        # Construct the unrolled computation graph for the decoder portion of
+        # the network only:
+        self._draw_decoder_model()
 
-#def draw_generative_model(write_attn):
+    def _draw_decoder_model(self):
+        # Sample latent z from normal prior with mean=0, stddev=1
+        z = tf.random_normal((self.batch_size, self.z_size), mean=0, stddev=1)
+
+        lstm_dec = tf.contrib.rnn.LSTMCell(self.dec_size, state_is_tuple=True)
+        writer = self._get_writer()
+
+        self.cs = [0] * self.T  # Sequence of canvases
+
+        # Attention window visualization parameters
+        self.w_cxs, self.w_cys, self.w_ds, self.w_thickness = [0] * self.T, [0] * self.T, [0] * self.T, [0] * self.T
+
+        # Initial state
+        dec_state = lstm_dec.zero_state(self.batch_size, tf.float32)
+
+        # Construct the unrolled computational graph
+        with tf.variable_scope("draw", reuse=tf.AUTO_REUSE):
+            for t in range(self.T):
+                c_prev = tf.zeros((self.batch_size, self.H, self.W, self.C)) if t == 0 else self.cs[t - 1]
+                w, h_dec, dec_state = self._decoder_model(t, z, lstm_dec, dec_state, writer)
+                self.cs[t] = c_prev + w
+
+        # This saver will only contain the variables under the scope
+        # "draw\decoder" in the full model. It can be used to restore from the
+        # full checkpoint and will simply ignore the stored weights that are not
+        # present in this model.
+        self.saver = tf.train.Saver()
+
+
+    def generate_images(self, sess):
+        return sess.run([self.cs, self.w_cxs, self.w_cys, self.w_ds, self.w_thickness])
+
+
+    #decoder_variables=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="draw/decoder")
