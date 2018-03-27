@@ -47,7 +47,6 @@ else:
 Lxs = [0] * train_iters
 Lzs = [0] * train_iters
 
-sess = tf.InteractiveSession()
 with tf.Session() as sess:
 # saver.restore(sess, "/tmp/draw/drawmodel.ckpt") # to restore from model, uncomment this line
     model.initialize_variables()

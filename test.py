@@ -43,7 +43,6 @@ else:
     print("dataset parameter was not recognized. Defaulting to 'mnist'.")
     data = data_loader.MNISTLoader(FLAGS.data_dir)
 
-sess = tf.InteractiveSession()
 with tf.Session() as sess:
     # Restore trained model from checkpoint
     ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
@@ -58,7 +57,7 @@ with tf.Session() as sess:
         test_nll += model.test_reconstruction_batch(sess, xtest)
         print("Test samples: " + str(batch * batch_size) + ", Mean NLL: " + str(test_nll / batch))
         xtest = data.next_test_batch(batch_size)
-        
+
 
     ## GENERATE EXAMPLES ##
     # Generate examples to be used for visualizing reconstruction process and the
@@ -76,7 +75,6 @@ with tf.Session() as sess:
     w_cy = np.array(w_cy)
     w_d = np.array(w_d)
     w_thick = np.array(w_thick)
-
 
     out_file = os.path.join(FLAGS.data_dir, "draw_examples.npz")
     np.savez(out_file, img=canvases, r_cx=r_cx, r_cy=r_cy, r_d=r_d, r_thick=r_thick, w_cx=w_cx, w_cy=w_cy, w_d=w_d, w_thick=w_thick)
