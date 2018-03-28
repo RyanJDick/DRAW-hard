@@ -1,8 +1,27 @@
-# takes data saved by DRAW model and generates animations
-# example usage: python visualize_recons.py noattn /tmp/draw/draw_examples.npz
+"""
+Takes data saved by DRAW model and generates visualizations
 
+Example usage:
+1. To create T images (at T time steps), each containing 10 x 10 = 100 sample
+reconstruction images:
+	python visualize.py 10imgsx100samples /tmp/draw/visualize /tmp/draw/draw_examples.npz
+
+2. To create a single image containing all T time steps for a single
+reconstruction image:
+	python visualize.py 1imgx1sample /tmp/draw/visualize /tmp/draw/draw_examples.npz
+
+3. To create a single image showing all T time steps for 10 reconstruction
+images:
+	python visualize.py 1imgx10samples /tmp/draw/visualize /tmp/draw/draw_examples.npz
+
+4. To plot the training curves for multiple training runs:
+	python visualize.py train_curve /tmp/draw/visualize /tmp/draw1/train_loss.npz /tmp/draw2/train_loss.npz
+"""
+
+import argparse
 import matplotlib
 import sys
+import os
 import numpy as np
 from scipy.misc import imsave
 
@@ -64,7 +83,7 @@ def draw_attention_box(img, attn_params, colour):
 		for y in range(y_top_out, y_bottom_out + 1):
 			img[x, y, :] = colour
 
-def xrecons_grid(X, read_attn_params, write_attn_params):
+def xrecons_grid(X, read_attn_params, write_attn_params, args):
 	"""
 	Plots grid of canvases for a single time step.
 
@@ -78,6 +97,8 @@ def xrecons_grid(X, read_attn_params, write_attn_params):
 
 	write_attn_params:	Tuple containing parameters needed to draw read
 						attention box. Tuple contains: (r_cx, r_cy, r_d, r_thick)
+
+	args:				Command line args.
 	"""
 	batch_size, H, W, C = X.shape
 
@@ -98,53 +119,89 @@ def xrecons_grid(X, read_attn_params, write_attn_params):
 			startc = j * pw + padsize
 			endc = startc + W
 			k = i * N + j # Batch index
-			if read_attn:
+			if args.read_attn:
 				draw_attention_box(X[i, j, :, :, :], read_attn_params[k, :], np.array([1.0, 0.0, 0.0]))
-			if write_attn:
+			if args.write_attn:
 				draw_attention_box(X[i, j, :, :, :], write_attn_params[k, :], np.array([0.0, 1.0, 0.0]))
 			img[startr:endr, startc:endc, :] = X[i, j, :, :, :]
 	return img
 
 def sigmoid(x):
-    """
+	"""
 	Numerically stable sigmoid function (avoids exp overflow)
 	"""
-    if x >= 0:
-        z = np.exp(-x)
-        return 1.0 / (1.0 + z)
-    else:
-        z = np.exp(x)
-        return z / (1.0 + z)
+	if x >= 0:
+		z = np.exp(-x)
+		return 1.0 / (1.0 + z)
+	else:
+		z = np.exp(x)
+		return z / (1.0 + z)
 
-if __name__ == '__main__':
-	prefix = sys.argv[1]
-	out_file = sys.argv[2]
-	data_dict = np.load(out_file)
+def load_sample_file(args):
+	"""
+	Load samples and attention params input file.
+	"""
+	data_dict = np.load(args.in_files[0])
 	img = data_dict['img'] # Shape: (T, batch_size, H, W, C)
 
-	read_attn_params = data_dict['r_params'] # Shape: (T, num_params, batch_size)
-	read_attn_params = np.swapaxes(read_attn_params, 1, 2) # Shape: (T, batch_size, num_params)
+	read_attn_params = None
+	write_attn_params = None
 
-	write_attn_params = data_dict['w_params'] # Shape: (T, num_params, batch_size)
-	write_attn_params = np.swapaxes(write_attn_params, 1, 2) # Shape: (T, batch_size, num_params)
+	if args.read_attn:
+		read_attn_params = data_dict['r_params'] # Shape: (T, num_params, batch_size)
+		read_attn_params = np.swapaxes(read_attn_params, 1, 2) # Shape: (T, batch_size, num_params)
+	if args.write_attn:
+		write_attn_params = data_dict['w_params'] # Shape: (T, num_params, batch_size)
+		write_attn_params = np.swapaxes(write_attn_params, 1, 2) # Shape: (T, batch_size, num_params)
 
-	T, batch_size, H, W, C = img.shape
 	sigmoid_func = np.vectorize(sigmoid)
 
 	X = sigmoid_func(img)  # x_recons=sigmoid(canvas)
 
 	# If the image is grayscale, convert to 3-channel (RGB) so that attention
 	# rectangles can be drawn for visualization:
-	if C == 1:
+	if X.shape[4] == 1:
 		X = np.repeat(X, 3, axis=4)
+
+	return X, read_attn_params, write_attn_params
+
+def create_directory(dir_path):
+	if not os.path.isdir(dir_path):
+		os.makedirs(dir_path)
+
+def create_10imgsx100samples(args):
+	if len(args.in_files) != 1:
+		sys.exit("One input file expected for '" + args.type + "', but " + str(len(args.in_files)) + " were found.")
+
+	X, read_attn_params, write_attn_params = load_sample_file(args)
+	T, batch_size, H, W, C = X.shape
+
+	create_directory(args.out_dir)
 
 	# Display reconstruction images
 	for t in range(T):
-		img = xrecons_grid(X[t, :, :, :, :], read_attn_params[t, :, :], write_attn_params[t, :, :])
+		if args.read_attn and args.write_attn:
+			img = xrecons_grid(X[t, :, :, :, :], read_attn_params[t, :, :], write_attn_params[t, :, :], args)
+		elif args.read_attn:
+			img = xrecons_grid(X[t, :, :, :, :], read_attn_params[t, :, :], None, args)
+		elif args.write_attn:
+			img = xrecons_grid(X[t, :, :, :, :], None, write_attn_params[t, :, :], args)
+		else:
+			img = xrecons_grid(X[t, :, :, :, :], None, None, args)
 		# you can merge using imagemagick, i.e. convert -delay 10 -loop 0 *.png mnist.gif
-		imgname = '%s_%d.png' % (prefix, t)
-		imsave(imgname, img)
-		print(imgname)
+		img_name = '%s_%d.png' % (args.prefix, t)
+		img_file = os.path.join(args.out_dir, img_name)
+		imsave(img_file, img)
+		print(img_file)
+
+
+def create_1imgx1sample(args):
+	pass
+
+def create_1imgx10samples(args):
+	pass
+
+def create_training_curve_plot(args):
 	'''
 	# Plot training loss
 	f = plt.figure()
@@ -154,3 +211,27 @@ if __name__ == '__main__':
 	plt.legend()
 	plt.savefig('%s_loss.png' % (prefix))
 	'''
+	pass
+
+if __name__ == '__main__':
+	parser = argparse.ArgumentParser()
+	parser.add_argument('type', help='Type of visualization to produce. ' +
+	'Options include: "10imgsx100samples", "1imgx1sample", "1imgx10samples", "train_curve"')
+	parser.add_argument('out_dir', help='Path to use when storing output files.')
+	parser.add_argument('in_files', nargs='+', help='Path to *.npz file(s) to read from')
+
+	parser.add_argument('--prefix', default='out', help='Prefix to use for output file name.')
+	parser.add_argument('--read_attn', action='store_true', help='Draw read attention windows on the visualization.')
+	parser.add_argument('--write_attn', action='store_true', help='Draw write attention windows on the visualization.')
+	args = parser.parse_args()
+
+	if args.type == '10imgsx100samples':
+		create_10imgsx100samples(args)
+	elif args.type == '1imgx1sample':
+		create_1imgx1sample(args)
+	elif args.type == '1imgx10samples':
+		create_1imgx10samples(args)
+	elif args.type == 'train_curve':
+		create_training_curve_plot(args)
+	else:
+		sys.exit("Visualization type: '" + args.type + "' not recognized.")
