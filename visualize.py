@@ -251,7 +251,24 @@ def create_1imgx1sample(args):
 	print(img_file)
 
 def create_1imgx10samples(args):
-	pass
+	if len(args.in_files) != 1:
+		sys.exit("One input file expected for '" + args.type + "', but " + str(len(args.in_files)) + " were found.")
+
+	X, read_attn_params, write_attn_params = load_sample_file(args)
+	T, batch_size, H, W, C = X.shape
+
+	recon_samples = []
+	for i in range(10):
+		args.sample_i = i
+		recon_samples.append(xrecons_single_sample(X, read_attn_params, write_attn_params, args))
+
+	img = np.concatenate(recon_samples, axis=0)
+
+	create_directory(args.out_dir)
+	img_name = '%s_10samples.png' % (args.prefix)
+	img_file = os.path.join(args.out_dir, img_name)
+	imsave(img_file, img)
+	print(img_file)
 
 def create_training_curve_plot(args):
 	'''
