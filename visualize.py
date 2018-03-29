@@ -271,16 +271,27 @@ def create_1imgx10samples(args):
 	print(img_file)
 
 def create_training_curve_plot(args):
-	'''
-	# Plot training loss
-	f = plt.figure()
-	plt.plot(Lxs, label='Reconstruction Loss Lx')
-	plt.plot(Lzs, label='Latent Loss Lz')
+	"""
+	Plot the training curves for all of the traing loss files on the same axis
+	"""
+	fig = plt.figure()
+
+	for in_file in args.in_files:
+		data_dict = np.load(in_file)
+		Lxs = data_dict['Lxs']
+		Lzs = data_dict['Lzs']
+		total_loss = Lxs + Lzs # Element-wise sum
+		# Use the last level directory name to label the data
+		label = in_file.split('/')[-2]
+		plt.plot(total_loss, label=label)
 	plt.xlabel('iterations')
 	plt.legend()
-	plt.savefig('%s_loss.png' % (prefix))
-	'''
-	pass
+
+	create_directory(args.out_dir)
+	file_name = '%s_loss.png' % (args.prefix)
+	file_path = os.path.join(args.out_dir, file_name)
+	plt.savefig(file_path)
+	print(file_path)
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()

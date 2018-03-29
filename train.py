@@ -57,3 +57,10 @@ with tf.Session() as sess:
             print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
     ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
     model.save_ckpt(sess, ckpt_file)
+
+    Lxs = np.array(Lxs)
+    Lzs = np.array(Lzs)
+
+    out_file = os.path.join(FLAGS.data_dir, "train_loss.npz")
+    np.savez(out_file, Lxs=Lxs, Lzs=Lzs)
+    print("Training loss saved in file: %s" % out_file)
