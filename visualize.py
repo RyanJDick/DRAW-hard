@@ -126,6 +126,46 @@ def xrecons_grid(X, read_attn_params, write_attn_params, args):
 			img[startr:endr, startc:endc, :] = X[i, j, :, :, :]
 	return img
 
+def xrecons_single_sample(X, read_attn_params, write_attn_params, args):
+	"""
+	Create a single image containing the output canvas at each of the T time
+	steps.
+
+
+	Parameters:
+	-----------
+	X :					X is a batch of image canvases. (T, batch_size, H, W, C)
+
+	read_attn_params:	Tuple containing parameters needed to draw read
+						attention box. Tuple contains: (r_cx, r_cy, r_d, r_thick)
+
+	write_attn_params:	Tuple containing parameters needed to draw read
+						attention box. Tuple contains: (r_cx, r_cy, r_d, r_thick)
+
+	args:				Command line args.
+	"""
+	T, batch_size, H, W, C = X.shape
+
+	padsize = 1
+	padval = 1.0
+	ph = H + 2 * padsize  # Padded height
+	pw = W + 2 * padsize  # Padded width
+
+	img = np.ones((ph, T * pw, C)) * padval
+
+	for t in range(T):
+		startr = padsize
+		endr = startr + H
+		startc = t * pw + padsize
+		endc = startc + W
+		if args.read_attn:
+			draw_attention_box(X[t, args.sample_i, :, :, :], read_attn_params[t, args.sample_i, ], np.array([1.0, 0.0, 0.0]))
+		if args.write_attn:
+			draw_attention_box(X[t, args.sample_i, :, :, :], write_attn_params[t, args.sample_i, ], np.array([0.0, 1.0, 0.0]))
+		img[startr:endr, startc:endc, :] = X[t, args.sample_i, :, :, : ]
+	return img
+
+
 def sigmoid(x):
 	"""
 	Numerically stable sigmoid function (avoids exp overflow)
@@ -196,7 +236,19 @@ def create_10imgsx100samples(args):
 
 
 def create_1imgx1sample(args):
-	pass
+	if len(args.in_files) != 1:
+		sys.exit("One input file expected for '" + args.type + "', but " + str(len(args.in_files)) + " were found.")
+
+	X, read_attn_params, write_attn_params = load_sample_file(args)
+	T, batch_size, H, W, C = X.shape
+
+	img = xrecons_single_sample(X, read_attn_params, write_attn_params, args)
+
+	create_directory(args.out_dir)
+	img_name = '%s_sample_%d.png' % (args.prefix, args.sample_i)
+	img_file = os.path.join(args.out_dir, img_name)
+	imsave(img_file, img)
+	print(img_file)
 
 def create_1imgx10samples(args):
 	pass
@@ -223,6 +275,7 @@ if __name__ == '__main__':
 	parser.add_argument('--prefix', default='out', help='Prefix to use for output file name.')
 	parser.add_argument('--read_attn', action='store_true', help='Draw read attention windows on the visualization.')
 	parser.add_argument('--write_attn', action='store_true', help='Draw write attention windows on the visualization.')
+	parser.add_argument('--sample_i', type=int, default=0, help='Index of sample to visualize for visualizations that only process a single sample. (Default = 0)')
 	args = parser.parse_args()
 
 	if args.type == '10imgsx100samples':
