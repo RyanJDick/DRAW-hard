@@ -203,6 +203,7 @@ def load_sample_file(args):
 	if X.shape[4] == 1:
 		X = np.repeat(X, 3, axis=4)
 
+	print(X)
 	return X, read_attn_params, write_attn_params
 
 def create_directory(dir_path):

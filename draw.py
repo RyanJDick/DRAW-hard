@@ -20,22 +20,22 @@ class DRAW:
     ## MODEL PARAMETERS ##
     W, H, C = 28, 28, 1  # image width, height
     img_size = H * W  # the canvas size
-    enc_size = 256  # number of hidden units / output size in LSTM
-    dec_size = 256
-    read_n = 5  # read glimpse grid width/height
-    write_n = 5  # write glimpse grid width/height
-    z_size = 10  # QSampler output size
-    T = 10  # MNIST generation sequence length
+    enc_size = 800 #256  # number of hidden units / output size in LSTM
+    dec_size = 800 #256
+    read_n = 12  # read glimpse grid width/height
+    write_n = 12  # write glimpse grid width/height
+    z_size = 100  # QSampler output size
+    T = 32 #10  # MNIST generation sequence length
     batch_size = 100  # training minibatch size
     learning_rate = 1e-3  # learning rate for optimizer
     eps = 1e-8  # epsilon for numerical stability
     read_attn = ""
     write_attn = ""
 
-
-    def __init__(self, read_attn, write_attn):
+    def __init__(self, read_attn, write_attn, dimensions):
         self.read_attn = read_attn
         self.write_attn = write_attn
+        self.batch_size, self.H, self.W, self.C = dimensions
 
 
     def _sampleQ(self, h_enc, e):
@@ -199,8 +199,8 @@ class DRAW:
 
 ### DRAW Full Model (Encoder and Decoder) ###
 class DRAWFullModel(DRAW):
-    def __init__(self, read_attn, write_attn):
-        super(DRAWFullModel, self).__init__(read_attn, write_attn)
+    def __init__(self, read_attn, write_attn, dimensions):
+        super(DRAWFullModel, self).__init__(read_attn, write_attn, dimensions)
         self._draw_full_model() # Construct the unrolled computation graph
 
     def _draw_full_model(self):
@@ -309,8 +309,8 @@ class DRAWFullModel(DRAW):
 
 ### DRAW Generative Model (Decoder Only) ###
 class DRAWGenerativeModel(DRAW):
-    def __init__(self, write_attn):
-        self.write_attn = write_attn
+    def __init__(self, write_attn, dimensions):
+        super(DRAWGenerativeModel, self).__init__(None, write_attn, dimensions)
         # Construct the unrolled computation graph for the decoder portion of
         # the network only:
         self._draw_decoder_model()

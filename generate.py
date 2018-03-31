@@ -21,14 +21,25 @@ import draw
 tf.flags.DEFINE_string("data_dir", "", "")
 tf.flags.DEFINE_string("write_attn", "no_attn", "Specify type of write attention " +
     "to use. Options include: 'no_attn', 'soft_attn', 'spatial_transformer_attn'.")
+tf.flags.DEFINE_string("dataset", "mnist", "Dataset to train the model with." +
+    " Options include: 'mnist', 'svhn'")
 
 FLAGS = tf.flags.FLAGS
 
 ## GENERATIVE PARAMETERS ##
 batch_size = 100
 
+# Select dataset:
+if FLAGS.dataset == 'mnist':
+    dimensions = (batch_size,) + data_loader.MNISTLoader.dimensions
+elif FLAGS.dataset == 'svhn':
+    dimensions = (batch_size,) + data_loader.SVHNLoader.dimensions
+else:
+    print("dataset parameter was not recognized. Defaulting to 'mnist'.")
+    dimensions = (batch_size,) + data_loader.MNISTLoader.dimensions
+
 ## CREATE MODEL ##
-model = draw.DRAWGenerativeModel(FLAGS.write_attn)
+model = draw.DRAWGenerativeModel(FLAGS.write_attn, dimensions)
 
 ## Generate Images ##
 with tf.Session() as sess:

@@ -5,7 +5,7 @@
 Script to evaluate a trained DRAW network.
 
 Example Usage:
-    python test.py --data_dir=/tmp/draw --read_attn=soft_attn --write_attn=soft_attn
+    python test.py --data_dir=/tmp/draw --dataset=mnist --read_attn=soft_attn --write_attn=soft_attn
 """
 
 import tensorflow as tf
@@ -24,24 +24,27 @@ tf.flags.DEFINE_string("read_attn", "no_attn", "Specify type of read attention "
 tf.flags.DEFINE_string("write_attn", "no_attn", "Specify type of write attention " +
     "to use. Options include: 'no_attn', 'soft_attn', 'spatial_transformer_attn'.")
 tf.flags.DEFINE_string("dataset", "mnist", "Dataset to train the model with." +
-    " Options include: 'mnist'")
+    " Options include: 'mnist', 'svhn'")
 
 FLAGS = tf.flags.FLAGS
 
 ## TESTING PARAMETERS ##
 batch_size = 100  # training minibatch size
 
-## CREATE MODEL ##
-model = draw.DRAWFullModel(FLAGS.read_attn, FLAGS.write_attn)
-
 ## TEST TRAINED MODEL ##
 
 # Select dataset:
 if FLAGS.dataset == 'mnist':
     data = data_loader.MNISTLoader(FLAGS.data_dir)
+elif FLAGS.dataset == 'svhn':
+    data = data_loader.SVHNLoader(FLAGS.data_dir)
 else:
     print("dataset parameter was not recognized. Defaulting to 'mnist'.")
     data = data_loader.MNISTLoader(FLAGS.data_dir)
+
+## CREATE MODEL ##
+dimensions = (batch_size,) + data.dimensions
+model = draw.DRAWFullModel(FLAGS.read_attn, FLAGS.write_attn, dimensions)
 
 with tf.Session() as sess:
     # Restore trained model from checkpoint
