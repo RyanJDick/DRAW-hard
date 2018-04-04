@@ -10,14 +10,14 @@ class WriteInterface:
     _C = 0 # Number of channels in input images and in attention window
     _N = 0 # Dimension of square attention window
 
-    def __init__(self, height, width, channels, read_n):
+    def __init__(self, height, width, channels, write_n):
         """
         Initialize write attention attributes.
         """
         self._H = height
         self._W = width
         self._C = channels
-        self._N = read_n
+        self._N = write_n
 
     def _generate_write_patch(self, h_dec):
         """
