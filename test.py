@@ -5,7 +5,7 @@
 Script to evaluate a trained DRAW network.
 
 Example Usage:
-    python test.py --data_dir=/tmp/draw --dataset=mnist --read_attn=soft_attn --write_attn=soft_attn
+    python test.py --data_dir=/tmp/draw --model_dir=./out --dataset=mnist --read_attn=soft_attn --write_attn=soft_attn
 """
 
 import tensorflow as tf
@@ -19,6 +19,7 @@ import data_loader
 import draw
 
 tf.flags.DEFINE_string("data_dir", "", "")
+tf.flags.DEFINE_string("model_dir", "", "")
 tf.flags.DEFINE_string("read_attn", "no_attn", "Specify type of read attention " +
     "to use. Options include: 'no_attn', 'soft_attn', 'spatial_transformer_attn'.")
 tf.flags.DEFINE_string("write_attn", "no_attn", "Specify type of write attention " +
@@ -48,7 +49,7 @@ model = draw.DRAWFullModel(FLAGS.read_attn, FLAGS.write_attn, dimensions)
 
 with tf.Session() as sess:
     # Restore trained model from checkpoint
-    ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
+    ckpt_file = os.path.join(FLAGS.model_dir, "draw_model.ckpt")
     model.restore_from_ckpt(sess, ckpt_file)
 
     xtest = data.next_test_batch(batch_size)
@@ -73,6 +74,6 @@ with tf.Session() as sess:
     r_params = np.array(r_params)
     w_params = np.array(w_params)
 
-    out_file = os.path.join(FLAGS.data_dir, "draw_examples.npz")
+    out_file = os.path.join(FLAGS.model_dir, "draw_examples.npz")
     np.savez(out_file, img=canvases, r_params=r_params, w_params=w_params)
     print("Outputs saved in file: %s" % out_file)

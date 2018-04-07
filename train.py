@@ -5,7 +5,7 @@
 Script to initialize and train the DRAW network.
 
 Example Usage:
-    python train.py --data_dir=/tmp/draw --dataset=svhn --read_attn=soft_attn --write_attn=soft_attn
+    python train.py --data_dir=/tmp/draw --model_dir=./out --dataset=svhn --read_attn=soft_attn --write_attn=soft_attn
 """
 
 import tensorflow as tf
@@ -19,6 +19,7 @@ import data_loader
 import draw
 
 tf.flags.DEFINE_string("data_dir", "", "")
+tf.flags.DEFINE_string("model_dir", "", "")
 tf.flags.DEFINE_string("read_attn", "no_attn", "Specify type of read attention " +
     "to use. Options include: 'no_attn', 'soft_attn', 'spatial_transformer_attn'.")
 tf.flags.DEFINE_string("write_attn", "no_attn", "Specify type of write attention " +
@@ -30,7 +31,7 @@ FLAGS = tf.flags.FLAGS
 
 ## TRAINING PARAMETERS ##
 batch_size = 100  # training minibatch size
-train_iters = 500
+train_iters = 10000
 
 ## RUN TRAINING ##
 
@@ -56,14 +57,14 @@ with tf.Session() as sess:
     for i in range(train_iters):
         xtrain = data.next_train_batch(batch_size)
         Lxs[i], Lzs[i] = model.train_batch(sess, xtrain)
-        #if i % 100 == 0:
-        print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
-    ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
+        if i % 100 == 0:
+            print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
+    ckpt_file = os.path.join(FLAGS.model_dir, "draw_model.ckpt")
     model.save_ckpt(sess, ckpt_file)
 
     Lxs = np.array(Lxs)
     Lzs = np.array(Lzs)
 
-    out_file = os.path.join(FLAGS.data_dir, "train_loss.npz")
+    out_file = os.path.join(FLAGS.model_dir, "train_loss.npz")
     np.savez(out_file, Lxs=Lxs, Lzs=Lzs)
     print("Training loss saved in file: %s" % out_file)

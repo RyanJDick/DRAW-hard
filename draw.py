@@ -21,12 +21,12 @@ class DRAW:
     ## MODEL PARAMETERS ##
     W, H, C = 28, 28, 1  # image width, height
     img_size = H * W  # the canvas size
-    enc_size = 800 #256  # number of hidden units / output size in LSTM
-    dec_size = 800 #256
+    enc_size = 256  # number of hidden units / output size in LSTM
+    dec_size = 256
     read_n = 12  # read glimpse grid width/height
     write_n = 12  # write glimpse grid width/height
-    z_size = 100  # QSampler output size
-    T = 32 #10  # MNIST generation sequence length
+    z_size = 10  # QSampler output size
+    T = 10  # MNIST generation sequence length
     batch_size = 100  # training minibatch size
     learning_rate = 1e-3  # learning rate for optimizer
     eps = 1e-8  # epsilon for numerical stability
