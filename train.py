@@ -56,8 +56,8 @@ with tf.Session() as sess:
     for i in range(train_iters):
         xtrain = data.next_train_batch(batch_size)
         Lxs[i], Lzs[i] = model.train_batch(sess, xtrain)
-        if i % 100 == 0:
-            print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
+        #if i % 100 == 0:
+        print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
     ckpt_file = os.path.join(FLAGS.data_dir, "draw_model.ckpt")
     model.save_ckpt(sess, ckpt_file)
 

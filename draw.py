@@ -13,6 +13,7 @@ import os
 from attention.no_attn import ReadNoAttn, WriteNoAttn
 from attention.soft_attn import ReadSoftAttn, WriteSoftAttn
 from attention.spatial_transformer_attn import ReadSpatialTransformerAttn, WriteSpatialTransformerAttn
+from attention.stochastic_attn import WriteStochasticAttn
 import data_loader
 
 class DRAW:
@@ -114,8 +115,11 @@ class DRAW:
         elif self.write_attn == 'soft_attn':
             writer = WriteSoftAttn(self.H, self.W, self.C, self.write_n)
         elif self.write_attn == 'spatial_transformer_attn':
-            write_n = 10
+            self.write_n = 10
             writer = WriteSpatialTransformerAttn(self.H, self.W, self.C, self.write_n)
+        elif self.write_attn == 'stochastic_attn':
+            self.write_n = 4
+            writer = WriteStochasticAttn(self.H, self.W, self.C, self.write_n)
         else:
             print("write_attn parameter was not recognized. Defaulting to 'no_attn'.")
             writer = WriteNoAttn(self.H, self.W, self.C, self.write_n)
@@ -187,7 +191,12 @@ class DRAW:
         with tf.variable_scope("decoder"):
             with tf.variable_scope("decoder_lstm"):
                 h_dec, dec_state = lstm_dec(z, dec_state)
-            w, self.write_params[t] = writer.write(h_dec)
+
+            if self.write_attn == 'stochastic_attn':
+                w, self.write_params[t], self.dists[t], self.samples[t] = writer.write(h_dec)
+            else:
+                w, self.write_params[t] = writer.write(h_dec)
+
             return (w, h_dec, dec_state)
 
     def restore_from_ckpt(self, sess, ckpt_file):
@@ -220,6 +229,8 @@ class DRAWFullModel(DRAW):
         # Attention window visualization parameters
         self.read_params = [0] * self.T
         self.write_params = [0] * self.T
+        self.dists = [0] * self.T
+        self.samples = [0] * self.T
 
         # initial states
         h_dec_prev = tf.zeros((self.batch_size, self.dec_size))
@@ -237,8 +248,20 @@ class DRAWFullModel(DRAW):
 
             self.Lx, self.Lz = self._loss(self.x, self.cs[-1], self.mus, self.sigmas, self.logsigmas)
             cost = self.Lx + self.Lz
+
+            if self.write_attn == 'stochastic_attn':
+                 Lr, Le, updated_baseline = writer.calc_attn_loss(self.Lx, self.dists, self.samples)
+                 cost = cost + Lr + Le
+
         with tf.variable_scope("optimizer"):
             self.train_op = self._optimizer(cost)
+
+            if self.write_attn == 'stochastic_attn':
+                with tf.control_dependencies([self.train_op]):
+                    # This creates a new train_op that first forces the normal
+                    # train_op to be run (via the control_dependency), and then
+                    # updated the baseline
+                    self.train_op = tf.group(updated_baseline)
 
         # Full saver:
         self.saver = tf.train.Saver()
@@ -326,6 +349,8 @@ class DRAWGenerativeModel(DRAW):
 
         # Attention window visualization parameters
         self.write_params = [0] * self.T
+        self.dists = [0] * self.T
+        self.samples = [0] * self.T
 
         # Initial state
         dec_state = lstm_dec.zero_state(self.batch_size, tf.float32)
