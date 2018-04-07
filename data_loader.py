@@ -104,8 +104,8 @@ class MNISTLoader(DataLoader):
         	os.makedirs(mnist_directory)
         data = mnist.input_data.read_data_sets(data_directory, one_hot=True) # binarized (0-1) mnist data
         train_data = data.train.images.reshape((-1, 28, 28, 1))
-        self._val_data = train_data[:1000, :, :, :]
-        self._train_data = train_data[1000:, :, :, :]
+        self._val_data = train_data[:3000, :, :, :]
+        self._train_data = train_data[3000:, :, :, :]
         self._test_data = data.test.images
         self._test_data = self._test_data.reshape((-1, 28, 28, 1))
 
@@ -149,8 +149,8 @@ class SVHNLoader(DataLoader):
         self._train_data = sio.loadmat(svhn_train_file)['X']
         self._train_data = np.moveaxis(self._train_data, -1, 0) # (num_data_points, 32, 32, 3)
         self._train_data = self._train_data / 255 # Scale to range [0, 1]
-        self._val_data = self._train_data[:1000, :, :, :]
-        self._train_data = self._train_data[1000:, :, :, :]
+        self._val_data = self._train_data[:3000, :, :, :]
+        self._train_data = self._train_data[3000:, :, :, :]
 
         self._test_data = sio.loadmat(svhn_test_file)['X']
         self._test_data = np.moveaxis(self._test_data, -1, 0) # (num_data_points, 32, 32, 3)

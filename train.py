@@ -88,7 +88,7 @@ with tf.Session() as sess:
             else:
                 no_improvement_count += 1
 
-            if no_improvement_count >= 3:
+            if no_improvement_count >= 5:
                 break
 
     Lxs = np.array(Lxs)
