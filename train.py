@@ -64,15 +64,32 @@ ckpt_file = os.path.join(FLAGS.model_dir, "draw_model.ckpt")
 with tf.Session() as sess:
 # saver.restore(sess, "/tmp/draw/drawmodel.ckpt") # to restore from model, uncomment this line
     model.initialize_variables()
+    best_val_nll = 10000 # Big value to start
+    no_improvement_count = 0 # Number of validation tests with no improvements
     for i in range(train_iters):
         xtrain = data.next_train_batch(batch_size)
         Lxs[i], Lzs[i] = model.train_batch(sess, xtrain)
         if i % 100 == 0:
             print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
-        if i % 1000 == 0: # save checkpoint every 1000 iterations
-            model.save_ckpt(sess, ckpt_file)
+        if i % 1000 == 0: # Run validation every 1000 iterations
+            xval = data.next_val_batch(batch_size)
+            batch = 0
+            val_nll = 0
+            while xval is not None:
+                batch += 1
+                val_nll += model.test_reconstruction_batch(sess, xval)
+                xval = data.next_test_batch(batch_size)
+            mean_nll = val_nll / batch
+            print("Validation Mean NLL: " + str(mean_nll))
+            if mean_nll < best_val_nll:
+                no_improvement_count = 0
+                best_val_nll = mean_nll
+                model.save_ckpt(sess, ckpt_file)
+            else:
+                no_improvment_count += 1
 
-    model.save_ckpt(sess, ckpt_file)
+            if no_improvement_count >= 3:
+                break
 
     Lxs = np.array(Lxs)
     Lzs = np.array(Lzs)
