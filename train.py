@@ -17,6 +17,7 @@ from attention.soft_attn import ReadSoftAttn, WriteSoftAttn
 from attention.spatial_transformer_attn import ReadSpatialTransformerAttn, WriteSpatialTransformerAttn
 import data_loader
 import draw
+import shutil
 
 tf.flags.DEFINE_string("data_dir", "", "")
 tf.flags.DEFINE_string("model_dir", "", "")
@@ -47,6 +48,13 @@ else:
 ## CREATE MODEL ##
 dimensions = (batch_size,) + data.dimensions
 model = draw.DRAWFullModel(FLAGS.read_attn, FLAGS.write_attn, dimensions)
+
+# Create model directory if it does not exist:
+if not os.path.exists(FLAGS.model_dir):
+    os.makedirs(FLAGS.model_dir)
+# Copy draw.py to the model directory so there is a record of all hyperparameters used:
+draw_copy_file = os.path.join(FLAGS.model_dir, "draw_model_copy.txt")
+shutil.copy2('draw.py', draw_copy_file)
 
 Lxs = [0] * train_iters
 Lzs = [0] * train_iters
