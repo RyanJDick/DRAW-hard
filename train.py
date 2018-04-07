@@ -51,6 +51,8 @@ model = draw.DRAWFullModel(FLAGS.read_attn, FLAGS.write_attn, dimensions)
 Lxs = [0] * train_iters
 Lzs = [0] * train_iters
 
+ckpt_file = os.path.join(FLAGS.model_dir, "draw_model.ckpt")
+
 with tf.Session() as sess:
 # saver.restore(sess, "/tmp/draw/drawmodel.ckpt") # to restore from model, uncomment this line
     model.initialize_variables()
@@ -59,7 +61,9 @@ with tf.Session() as sess:
         Lxs[i], Lzs[i] = model.train_batch(sess, xtrain)
         if i % 100 == 0:
             print("iter=%d : Lx: %f Lz: %f" % (i, Lxs[i], Lzs[i]))
-    ckpt_file = os.path.join(FLAGS.model_dir, "draw_model.ckpt")
+        if i % 1000 == 0: # save checkpoint every 1000 iterations
+            model.save_ckpt(sess, ckpt_file)
+
     model.save_ckpt(sess, ckpt_file)
 
     Lxs = np.array(Lxs)
