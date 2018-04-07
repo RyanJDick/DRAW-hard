@@ -32,7 +32,7 @@ FLAGS = tf.flags.FLAGS
 
 ## TRAINING PARAMETERS ##
 batch_size = 100  # training minibatch size
-train_iters = 10000
+train_iters = 30000
 
 ## RUN TRAINING ##
 
@@ -62,7 +62,7 @@ Lzs = [0] * train_iters
 ckpt_file = os.path.join(FLAGS.model_dir, "draw_model.ckpt")
 
 with tf.Session() as sess:
-# saver.restore(sess, "/tmp/draw/drawmodel.ckpt") # to restore from model, uncomment this line
+    # model.restore_from_ckpt(sess, ckpt_file) # to restore from model, uncomment this line
     model.initialize_variables()
     best_val_nll = 10000 # Big value to start
     no_improvement_count = 0 # Number of validation tests with no improvements
@@ -86,7 +86,7 @@ with tf.Session() as sess:
                 best_val_nll = mean_nll
                 model.save_ckpt(sess, ckpt_file)
             else:
-                no_improvment_count += 1
+                no_improvement_count += 1
 
             if no_improvement_count >= 3:
                 break
