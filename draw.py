@@ -247,7 +247,12 @@ class DRAWFullModel(DRAW):
                 h_dec_prev = h_dec
 
             self.Lx, self.Lz = self._loss(self.x, self.cs[-1], self.mus, self.sigmas, self.logsigmas)
-            cost = self.Lx + self.Lz
+            # L2 Regularization on all weightsexcept for biases
+            l2 = 0.1 * sum(tf.nn.l2_loss(tf_var)
+                                    for tf_var in tf.trainable_variables()
+                                    if not ("Bias" in tf_var.name or "bias" in tf_var.name))
+
+            cost = self.Lx + self.Lz + l2
 
             if self.write_attn == 'stochastic_attn':
                  Lr, Le, updated_baseline = writer.calc_attn_loss(self.Lx, self.dists, self.samples)
