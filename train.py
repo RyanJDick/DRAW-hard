@@ -60,7 +60,7 @@ Lxs = [0] * train_iters
 Lzs = [0] * train_iters
 
 ckpt_file = os.path.join(FLAGS.model_dir, "draw_model.ckpt")
-
+val_loss = []
 with tf.Session() as sess:
     # model.restore_from_ckpt(sess, ckpt_file) # to restore from model, uncomment this line
     model.initialize_variables()
@@ -80,6 +80,7 @@ with tf.Session() as sess:
                 val_nll += model.test_reconstruction_batch(sess, xval)
                 xval = data.next_test_batch(batch_size)
             mean_nll = val_nll / batch
+            val_loss.append(mean_nll)
             print("Validation Mean NLL: " + str(mean_nll))
             if mean_nll < best_val_nll:
                 no_improvement_count = 0
@@ -93,7 +94,8 @@ with tf.Session() as sess:
 
     Lxs = np.array(Lxs)
     Lzs = np.array(Lzs)
+    val_loss = np.array(val_loss)
 
     out_file = os.path.join(FLAGS.model_dir, "train_loss.npz")
-    np.savez(out_file, Lxs=Lxs, Lzs=Lzs)
+    np.savez(out_file, Lxs=Lxs, Lzs=Lzs, Val=val_loss)
     print("Training loss saved in file: %s" % out_file)
