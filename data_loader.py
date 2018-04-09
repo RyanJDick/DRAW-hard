@@ -102,13 +102,13 @@ class MNISTLoader(DataLoader):
         mnist_directory = os.path.join(data_directory, "mnist")
         if not os.path.exists(mnist_directory):
         	os.makedirs(mnist_directory)
-        data = mnist.input_data.read_data_sets(data_directory, one_hot=True) # binarized (0-1) mnist data
+        data = mnist.input_data.read_data_sets(data_directory, one_hot=True) # (0-1) mnist data
         train_data = data.train.images.reshape((-1, 28, 28, 1))
+        train_data = np.where(train_data > 0.5, 1.0, 0.0) # Binarize the MNIST data
         self._val_data = train_data[:3000, :, :, :]
         self._train_data = train_data[3000:, :, :, :]
-        self._test_data = data.test.images
-        self._test_data = self._test_data.reshape((-1, 28, 28, 1))
-
+        test_data = data.test.images.reshape((-1, 28, 28, 1))
+        self._test_data = np.where(test_data > 0.5, 1.0, 0.0)
         self._num_val_images = self._val_data.shape[0]
         self._cur_val_index = 0
 
