@@ -73,13 +73,14 @@ class WriteStochasticAttn(WriteInterface):
 				with tf.variable_scope('alphas'):
 					alpha_logits = tf.contrib.layers.fully_connected(h_dec, num_attn_regions,
 						activation_fn=None, # Generate logits in range (-inf, inf)
-						weights_initializer=tf.zeros_initializer, # Initially, all regions are equally likely
+						#weights_initializer=tf.zeros_initializer, # Initially, all regions are equally likely
 						scope='fc')
-
+					alpha = tf.nn.softmax(alpha_logits)
 				with tf.variable_scope('sample'):
 					dist = tf.contrib.distributions.OneHotCategorical(logits=alpha_logits, dtype=tf.float32)
 
 			alpha_sample = dist.sample() # Draw a single one-hot sample for each image in batch (batch_size, num_attn_regions)
+			alpha_sample = alpha
 			alpha_sample = tf.stop_gradient(alpha_sample) # Do not propogate gradients back through the sampled alphas
 
 			attn_windows = []
@@ -187,7 +188,7 @@ class WriteStochasticAttn(WriteInterface):
 		log_prob = tf.reduce_mean(log_prob) # Average over time steps
 
 		# Note: baseline is added because Lx_no_grad is already a loss, not a reward
-		Lr = reinforce_loss_weight * ((Lx_no_grad + baseline_no_grad) * log_prob)
+		Lr = reinforce_loss_weight * ((Lx_no_grad - baseline_no_grad) * log_prob)
 
 		# Alpha distribution entropy loss:
 		# This loss encourages the model to heavily weight a single attention region
