@@ -29,14 +29,14 @@ def spatial_transformer_attn_window_params(scope, h_dec):
 	with tf.variable_scope(scope):
 		with tf.variable_scope('scale'):
 			scale = tf.contrib.layers.fully_connected(h_dec, 1,
-				activation_fn=tf.nn.sigmoid, # Limit scale to (0,1)
+				#activation_fn=tf.nn.sigmoid, # Limit scale to (0,1)
 				weights_initializer=tf.zeros_initializer,
 				biases_initializer=tf.ones_initializer, # Initially, output scale = 1
 				scope='fc')
 			s = scale[:, 0]
 		with tf.variable_scope('shift'):
 			shift = tf.contrib.layers.fully_connected(h_dec, 2,
-				activation_fn=tf.nn.tanh, # Limit translation to (-1, 1)
+				#activation_fn=tf.nn.tanh, # Limit translation to (-1, 1)
 				weights_initializer=tf.zeros_initializer,
 				biases_initializer=tf.zeros_initializer, # Initially, output shift = 0
 				scope='fc')
