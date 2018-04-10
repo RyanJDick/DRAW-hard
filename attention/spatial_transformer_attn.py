@@ -27,20 +27,33 @@ def spatial_transformer_attn_window_params(scope, h_dec):
 	'''
 	# Define 'localization network':
 	with tf.variable_scope(scope):
+		params = tf.contrib.layers.fully_connected(h_dec, 3, activation_fn=None, scope='fc')
+		tx, ty, s = tf.split(params, 3, 1)
+		tx = tf.squeeze(tx)
+		ty = tf.squeeze(ty)
+		s = tf.squeeze(s)
+		#tx = tf.constant(0.0, shape = [100])
+		#ty = tf.constant(0.0, shape = [100])
+		#print("tx shape: " + str(tx.get_shape()))
+		'''
 		with tf.variable_scope('scale'):
 			scale = tf.contrib.layers.fully_connected(h_dec, 1,
-				#activation_fn=tf.nn.sigmoid, # Limit scale to (0,1)
-				weights_initializer=tf.zeros_initializer,
-				biases_initializer=tf.ones_initializer, # Initially, output scale = 1
+				activation_fn=tf.nn.sigmoid, # Limit scale to (0,1)
+				#weights_initializer=tf.zeros_initializer,
+				#biases_initializer=tf.ones_initializer, # Initially, output scale = 1
 				scope='fc')
+			scale = scale * 0.9 + 0.1
 			s = scale[:, 0]
+			#s = tf.Print(s, [s])
 		with tf.variable_scope('shift'):
 			shift = tf.contrib.layers.fully_connected(h_dec, 2,
-				#activation_fn=tf.nn.tanh, # Limit translation to (-1, 1)
-				weights_initializer=tf.zeros_initializer,
-				biases_initializer=tf.zeros_initializer, # Initially, output shift = 0
+				activation_fn=tf.nn.tanh, # Limit translation to (-1, 1)
+				#weights_initializer=tf.zeros_initializer,
+				#biases_initializer=tf.zeros_initializer, # Initially, output shift = 0
 				scope='fc')
 			tx, ty = shift[:, 0], shift[:, 1]
+			#tx = tf.Print(tx, [tx])
+		'''
 		return s, tx, ty
 
 def params_to_transformation_matrix(s, tx, ty):
@@ -56,10 +69,12 @@ def params_to_transformation_matrix(s, tx, ty):
 	 [[s2,  0, tx2],  # batch 2
 	  [ 0, s2, ty2]]]
 	"""
-	return tf.stack([
+	theta = tf.stack([
 		tf.concat([tf.stack([s, tf.zeros_like(s)], axis=1), tf.expand_dims(tx, 1)], axis=1),
 		tf.concat([tf.stack([tf.zeros_like(s), s], axis=1), tf.expand_dims(ty, 1)], axis=1),
 		], axis=1)
+	theta = tf.contrib.layers.flatten(theta)
+	return(theta)
 
 class ReadSpatialTransformerAttn(ReadInterface):
 	"""
