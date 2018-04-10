@@ -32,7 +32,7 @@ FLAGS = tf.flags.FLAGS
 
 ## TRAINING PARAMETERS ##
 batch_size = 100  # training minibatch size
-train_iters = 30000
+train_iters = 60000
 
 ## RUN TRAINING ##
 
@@ -62,7 +62,7 @@ Lzs = [0] * train_iters
 ckpt_file = os.path.join(FLAGS.model_dir, "draw_model.ckpt")
 val_loss = []
 with tf.Session() as sess:
-    # model.restore_from_ckpt(sess, ckpt_file) # to restore from model, uncomment this line
+    #model.restore_from_ckpt(sess, ckpt_file) # to restore from model, uncomment this line
     model.initialize_variables()
     best_val_nll = 10000 # Big value to start
     no_improvement_count = 0 # Number of validation tests with no improvements
@@ -77,8 +77,8 @@ with tf.Session() as sess:
             val_nll = 0
             while xval is not None:
                 batch += 1
-                val_nll += model.test_reconstruction_batch(sess, xval)
-                xval = data.next_test_batch(batch_size)
+                val_nll += sum(model.test_reconstruction_batch(sess, xval))
+                xval = data.next_val_batch(batch_size)
             mean_nll = val_nll / batch
             val_loss.append(mean_nll)
             print("Validation Mean NLL: " + str(mean_nll))

@@ -58,7 +58,8 @@ with tf.Session() as sess:
     print("Testing trained model:")
     while xtest is not None:
         batch += 1
-        test_nll += model.test_reconstruction_batch(sess, xtest)
+        Lx, Lz = model.test_reconstruction_batch(sess, xtest)
+        test_nll += Lx + Lz
         print("Test samples: " + str(batch * batch_size) + ", Mean NLL: " + str(test_nll / batch))
         xtest = data.next_test_batch(batch_size)
 
