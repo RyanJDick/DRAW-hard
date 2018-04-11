@@ -306,8 +306,8 @@ class DRAWFullModel(DRAW):
         Lx_mean:    Mean reconstruction loss over the entire batch.
         """
         feed_dict = {self.x: batch}
-        recon_loss = sess.run(self.Lx, feed_dict)
-        return recon_loss
+        recon_loss, latent_loss = sess.run([self.Lx, self.Lz], feed_dict)
+        return recon_loss, latent_loss
 
     def generate_examples(self, sess, batch):
         """
