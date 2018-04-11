@@ -28,7 +28,7 @@ from scipy.misc import imsave
 matplotlib.use('Agg')  # Force matplotlib to not use any Xwindows backend.
 import matplotlib.pyplot as plt
 
-read_attn = True
+read_attn = False
 write_attn = True
 
 def draw_attention_box(img, attn_params, colour):
@@ -66,22 +66,22 @@ def draw_attention_box(img, attn_params, colour):
 	# Draw top line:
 	for x in range(x_left_out, x_right_out + 1):
 		for y in range(y_top_out, y_top_in):
-			img[x, y, :] = colour
+			img[y, x, :] = colour
 
 	# Draw bottom line:
 	for x in range(x_left_out, x_right_out + 1):
 		for y in range(y_bottom_in + 1, y_bottom_out + 1):
-			img[x, y, :] = colour
+			img[y, x, :] = colour
 
 	# Draw left line:
 	for x in range(x_left_out, x_left_in):
 		for y in range(y_top_out, y_bottom_out + 1):
-			img[x, y, :] = colour
+			img[y, x, :] = colour
 
 	# Draw right line:
 	for x in range(x_right_in + 1, x_right_out + 1):
 		for y in range(y_top_out, y_bottom_out + 1):
-			img[x, y, :] = colour
+			img[y, x, :] = colour
 
 def xrecons_grid(X, read_attn_params, write_attn_params, args):
 	"""
@@ -203,7 +203,6 @@ def load_sample_file(args):
 	if X.shape[4] == 1:
 		X = np.repeat(X, 3, axis=4)
 
-	print(X)
 	return X, read_attn_params, write_attn_params
 
 def create_directory(dir_path):
@@ -282,10 +281,16 @@ def create_training_curve_plot(args):
 		Lxs = data_dict['Lxs']
 		Lzs = data_dict['Lzs']
 		total_loss = Lxs + Lzs # Element-wise sum
+		# Remove the zeroes that exist in some training curves:
+		for i in range(len(total_loss)):
+			if total_loss[i] == 0:
+				total_loss = total_loss[:i]
+				break
 		# Use the last level directory name to label the data
 		label = in_file.split('/')[-2]
 		plt.plot(total_loss, label=label)
-	plt.xlabel('iterations')
+	plt.xlabel('Iterations')
+	plt.ylabel('NLL Loss')
 	plt.legend()
 
 	create_directory(args.out_dir)
